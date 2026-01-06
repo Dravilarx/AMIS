@@ -1,0 +1,7 @@
+{
+  "name": "A&S",
+  "description": "PLATAFORMA AMIS SORAN",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
