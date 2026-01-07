@@ -3,13 +3,13 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { AgrawallAnalysis } from "../types";
 
 export const analyzeMedicalReport = async (
-  report: string, 
+  report: string,
   reference: string = '',
   isBase64: boolean = false,
   mimeType: string = 'text/plain'
 ): Promise<{ analysis: AgrawallAnalysis; text: string }> => {
   const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-  
+
   const systemInstruction = `Actúa como un radiólogo consultor senior especializado en QA utilizando la Escala Agrawal (2010). 
   Tu misión es analizar informes radiológicos e identificar discrepancias o errores.
   
@@ -58,7 +58,7 @@ export const analyzeMedicalReport = async (
   };
 
   const promptText = `Analiza este informe médico y asigna el nivel Agrawal correspondiente. Justifica técnicamente tu decisión. ${reference ? 'Referencia previa: ' + reference : ''}`;
-  
+
   const parts: any[] = [];
   if (isBase64) {
     parts.push({
@@ -73,7 +73,7 @@ export const analyzeMedicalReport = async (
   parts.push({ text: promptText });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.0-flash-exp',
     contents: { parts },
     config: {
       systemInstruction,
@@ -138,7 +138,7 @@ export const analyzeContractDocument = async (text: string): Promise<any> => {
 export const analyzeHRProfile = async (profileData: string): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
   const response = await ai.models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.0-flash-exp',
     contents: `Analiza este perfil: ${profileData}`,
     config: {
       systemInstruction: "Evaluación de desempeño clínico y sugerencias de capacitación."

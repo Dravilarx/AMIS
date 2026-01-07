@@ -375,7 +375,10 @@ const App: React.FC = () => {
 };
 
 const DashboardCard = ({ onClick, label, val, icon, color }: any) => (
-  <div className={`p-8 rounded-[32px] ${color} text-white shadow-xl transition-transform hover:scale-105 cursor-pointer flex flex-col justify-between h-48 group`}>
+  <div 
+    onClick={onClick}
+    className={`p-8 rounded-[32px] ${color} text-white shadow-xl transition-transform hover:scale-105 cursor-pointer flex flex-col justify-between h-48 group`}
+  >
     <div>
       <div className="mb-4 opacity-80 group-hover:scale-110 transition-transform origin-left">{icon}</div>
       <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">{label}</p>
