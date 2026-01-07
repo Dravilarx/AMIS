@@ -23,6 +23,9 @@ const EmployeeDirectory: React.FC<Props> = ({ employees, isDark, onAnalyze, onDe
         return <span className="bg-red-500/10 text-red-500 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase"><ShieldAlert className="w-2.5 h-2.5" /> Suspendido</span>;
       case 'Renuncia':
         return <span className="bg-slate-500/10 text-slate-500 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase"><CircleSlash className="w-2.5 h-2.5" /> Renuncia</span>;
+      case 'Baja Temporal':
+        return <span className="bg-red-950/10 text-red-400 flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase"><Trash2 className="w-2.5 h-2.5" /> Baja Temp.</span>;
+
       default:
         return <span className="bg-slate-500/10 text-slate-500 px-2 py-0.5 rounded-full text-[8px] font-black uppercase">{status}</span>;
     }
@@ -34,10 +37,10 @@ const EmployeeDirectory: React.FC<Props> = ({ employees, isDark, onAnalyze, onDe
         <h3 className="text-xl font-black uppercase tracking-tighter">Directorio Maestro Staff</h3>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30" />
-          <input 
-            type="text" 
-            placeholder="Filtrar staff..." 
-            className="pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-full text-xs outline-none w-full sm:w-64" 
+          <input
+            type="text"
+            placeholder="Filtrar staff..."
+            className="pl-10 pr-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-full text-xs outline-none w-full sm:w-64"
           />
         </div>
       </div>
@@ -66,6 +69,10 @@ const EmployeeDirectory: React.FC<Props> = ({ employees, isDark, onAnalyze, onDe
                       </div>
                       <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest bg-blue-500/10 px-2 py-0.5 rounded-md inline-block mt-0.5">{emp.role}</p>
                       {emp.subSpecialty && <p className="text-[9px] opacity-60 font-bold uppercase mt-1 italic">{emp.subSpecialty}</p>}
+                      {emp.terminationDate && (emp.status === 'Renuncia' || emp.status === 'Baja Temporal') && (
+                        <p className="text-[8px] text-red-500 font-bold uppercase mt-1">Baja: {emp.terminationDate}</p>
+                      )}
+
                     </div>
                   </div>
                 </td>

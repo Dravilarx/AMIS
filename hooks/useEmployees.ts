@@ -4,26 +4,32 @@ import { Employee } from '../types';
 import { db } from '../services/db';
 
 const INITIAL_EMPLOYEES: Employee[] = [
-  { 
-    id: '1', 
-    firstName: 'Julián', 
-    lastName: 'Riquelme', 
-    role: 'Médico', 
-    department: 'Radiología', 
+  {
+    id: '1',
+    firstName: 'Julián',
+    lastName: 'Riquelme',
+    role: 'Médico',
+    department: 'Radiología',
     subSpecialty: 'Neurorradiología',
     group: 'Staff Senior',
     hiringEntity: 'AMIS SORAN SPA',
     tags: ['Especialista', 'Docente', 'Investigador'],
-    status: 'Activo', 
-    performance: 94, 
+    status: 'Activo',
+    performance: 94,
     birthDate: '1985-04-12',
     joinDate: '2018-05-12',
     university: 'Pontificia Universidad Católica',
+    superintendenciaId: '12345-6',
     email: 'j.riquelme@amis.health',
     phone: '+56 9 1234 5678',
     idNumber: '15.432.123-K',
     nationality: 'Chilena',
-    residenceCountry: 'Chile'
+    residenceCountry: 'Chile',
+    residenceCity: 'Santiago',
+    laborRelation: 'Contrato',
+    contractType: 'Indefinido',
+    username: 'j.riquelme',
+    signatureType: 'Firma Avanzada'
   }
 ];
 
@@ -52,7 +58,7 @@ export const useEmployees = () => {
       status: 'Activo',
       performance: Math.floor(Math.random() * 15) + 85,
     } as Employee;
-    
+
     await db.add(collection, newEmp);
     setEmployees(prev => [newEmp, ...prev]);
     return newEmp;

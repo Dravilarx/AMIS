@@ -9,16 +9,16 @@ export interface UserSession {
   photo?: string;
 }
 
-export type ActiveModule = 
-  | 'agrawall' 
-  | 'hr' 
-  | 'documentation' 
-  | 'timeoff' 
-  | 'procedures' 
-  | 'messaging' 
-  | 'dashboard' 
-  | 'institutions' 
-  | 'news' 
+export type ActiveModule =
+  | 'agrawall'
+  | 'hr'
+  | 'documentation'
+  | 'timeoff'
+  | 'procedures'
+  | 'messaging'
+  | 'dashboard'
+  | 'institutions'
+  | 'news'
   | 'signatures'
   | 'management'
   | 'shifts'
@@ -60,7 +60,7 @@ export interface DocumentRecord {
   name: string;
   category: 'Legal' | 'Clinical' | 'Administrative' | 'Training' | 'Contract';
   status: 'Pending' | 'Uploaded' | 'Verified' | 'Expired';
-  createdDate: string; 
+  createdDate: string;
   uploadDate?: string;
   expiryDate?: string;
   fileUrl?: string;
@@ -89,12 +89,12 @@ export interface SignatureDocument {
   id: string;
   title: string;
   description: string;
-  content: string; 
+  content: string;
   status: SignatureStatus;
   createdAt: string;
   viewedAt?: string;
   signedAt?: string;
-  signatureData?: string; 
+  signatureData?: string;
   signerName: string;
   signerRole: string;
   signerEmail: string;
@@ -150,20 +150,27 @@ export interface Employee {
   birthDate: string;
   joinDate: string;
   university: string;
+  superintendenciaId?: string;
   email: string;
   phone: string;
   photo?: string;
-  idNumber: string; 
+  idNumber: string;
   nationality: string;
   residenceCountry: string;
+  residenceCity: string;
   role: 'Médico' | 'Técnico' | 'Enfermería' | 'Administrativo';
   department: string;
   subSpecialty?: string;
   group?: string;
-  hiringEntity: string; 
+  hiringEntity: string;
+  contractType?: string;
+  username?: string;
+  signatureType?: string;
+  laborRelation?: 'Sociedad' | 'Independiente' | 'Contrato';
+  terminationDate?: string;
   tags?: string[];
   status: 'Activo' | 'Licencia Médica' | 'Vacaciones' | 'Suspendido' | 'Renuncia' | 'Baja Temporal';
-  performance: number; 
+  performance: number;
 }
 
 // Time Off Types
@@ -194,8 +201,8 @@ export interface NewsPost {
   category: NewsCategory;
   timestamp: string;
   eventDate?: string;
-  targetRoles: UserRole[]; 
-  targetUserIds: string[]; 
+  targetRoles: UserRole[];
+  targetUserIds: string[];
   attachments: {
     id: string;
     type: 'image' | 'video' | 'file' | 'link';
@@ -254,13 +261,13 @@ export interface MessageAttachment {
 export interface Message {
   id: string;
   senderId: string;
-  recipientIds: string[]; 
-  ccIds?: string[];      
+  recipientIds: string[];
+  ccIds?: string[];
   subject: string;
   content: string;
   timestamp: string;
   read: boolean;
   attachments: MessageAttachment[];
   folder: 'inbox' | 'sent' | 'trash';
-  groupTag?: string;     
+  groupTag?: string;
 }

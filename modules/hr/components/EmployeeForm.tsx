@@ -1,6 +1,6 @@
 
 import React, { useState, KeyboardEvent } from 'react';
-import { X, Check, Camera, Mail, Phone, Calendar, Globe, School, IdCard, Tag, Layers, MapPin, Award as AwardIcon, Activity, Building } from 'lucide-react';
+import { X, Check, Camera, Mail, Phone, Calendar, Globe, School, IdCard, Tag, Layers, MapPin, Award as AwardIcon, Activity, Building, User, PenTool, FileText, Briefcase } from 'lucide-react';
 import { Employee } from '../../../types';
 
 interface Props {
@@ -12,8 +12,12 @@ interface Props {
 const EmployeeForm: React.FC<Props> = ({ isDark, onClose, onSubmit }) => {
   const [formData, setFormData] = useState<Partial<Employee>>({
     firstName: '', lastName: '', birthDate: '', joinDate: new Date().toISOString().split('T')[0],
-    university: '', email: '', phone: '', idNumber: '', nationality: '', residenceCountry: '',
-    role: 'Médico', department: '', subSpecialty: '', group: '', hiringEntity: '', tags: [], photo: '',
+    university: '', superintendenciaId: '', email: '', phone: '', idNumber: '', nationality: '',
+    residenceCountry: '', residenceCity: '',
+    role: 'Médico', department: '', subSpecialty: '', group: '', hiringEntity: '',
+    contractType: '', username: '', signatureType: 'Firma Simple',
+    laborRelation: 'Contrato', terminationDate: '',
+    tags: [], photo: '',
     status: 'Activo'
   });
   const [tagInput, setTagInput] = useState('');
@@ -38,6 +42,8 @@ const EmployeeForm: React.FC<Props> = ({ isDark, onClose, onSubmit }) => {
     }
   };
 
+  const showTerminationDate = formData.status === 'Renuncia' || formData.status === 'Baja Temporal';
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md" onClick={onClose} />
@@ -48,7 +54,7 @@ const EmployeeForm: React.FC<Props> = ({ isDark, onClose, onSubmit }) => {
             <X className="w-6 h-6" />
           </button>
         </div>
-        
+
         <form onSubmit={(e) => { e.preventDefault(); onSubmit(formData); }} className="p-8 overflow-y-auto max-h-[calc(95vh-100px)] custom-scrollbar">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
             <div className="lg:col-span-4 space-y-8">
@@ -62,14 +68,26 @@ const EmployeeForm: React.FC<Props> = ({ isDark, onClose, onSubmit }) => {
                 </div>
               </div>
               <div className="space-y-4">
-                <InputGroup label="Grupo Corporativo" icon={<Layers className="w-3 h-3"/>} value={formData.group} onChange={v => setFormData({...formData, group: v})} placeholder="Ej. Staff Senior" isDark={isDark} />
-                <InputGroup label="Razón Social Contratante" icon={<Building className="w-3 h-3"/>} value={formData.hiringEntity} onChange={v => setFormData({...formData, hiringEntity: v})} placeholder="Ej. AMIS SORAN SPA" isDark={isDark} required />
+                <InputGroup label="Grupo Corporativo" icon={<Layers className="w-3 h-3" />} value={formData.group} onChange={v => setFormData({ ...formData, group: v })} placeholder="Ej. Staff Senior" isDark={isDark} />
+                <InputGroup label="Razón Social Contratante" icon={<Building className="w-3 h-3" />} value={formData.hiringEntity} onChange={v => setFormData({ ...formData, hiringEntity: v })} placeholder="Ej. AMIS SORAN SPA" isDark={isDark} required />
+
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 mb-2"><Tag className="w-3 h-3"/> Tags</label>
+                  <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 mb-2"><Briefcase className="w-3 h-3" /> Relación Laboral</label>
+                  <select value={formData.laborRelation} onChange={e => setFormData({ ...formData, laborRelation: e.target.value as any })} className={`w-full p-4 rounded-xl border outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                    <option value="Contrato">Contrato</option>
+                    <option value="Independiente">Independiente</option>
+                    <option value="Sociedad">Sociedad</option>
+                  </select>
+                </div>
+
+                <InputGroup label="Tipo de Contrato" icon={<FileText className="w-3 h-3" />} value={formData.contractType} onChange={v => setFormData({ ...formData, contractType: v })} placeholder="Ej. Indefinido" isDark={isDark} />
+
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 mb-2"><Tag className="w-3 h-3" /> Tags</label>
                   <div className={`flex flex-wrap gap-2 p-2 rounded-xl border transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                     {formData.tags?.map((tag, idx) => (
                       <span key={idx} className="bg-blue-600 text-white text-[9px] font-black uppercase px-2 py-1 rounded-md flex items-center gap-1">
-                        {tag} <X className="w-2.5 h-2.5 cursor-pointer" onClick={() => setFormData({...formData, tags: formData.tags?.filter((_, i) => i !== idx)})} />
+                        {tag} <X className="w-2.5 h-2.5 cursor-pointer" onClick={() => setFormData({ ...formData, tags: formData.tags?.filter((_, i) => i !== idx) })} />
                       </span>
                     ))}
                     <input type="text" value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyDown={handleAddTag} placeholder="Add tag..." className="flex-grow bg-transparent outline-none text-xs p-1" />
@@ -80,18 +98,24 @@ const EmployeeForm: React.FC<Props> = ({ isDark, onClose, onSubmit }) => {
 
             <div className="lg:col-span-8 space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InputGroup label="Nombre" value={formData.firstName} onChange={v => setFormData({...formData, firstName: v})} placeholder="Isaac" isDark={isDark} required />
-                <InputGroup label="Apellidos" value={formData.lastName} onChange={v => setFormData({...formData, lastName: v})} placeholder="Newton" isDark={isDark} required />
-                <InputGroup label="RUT / DNI" icon={<IdCard className="w-3 h-3"/>} value={formData.idNumber} onChange={v => setFormData({...formData, idNumber: v})} placeholder="12.345.678-9" isDark={isDark} required />
-                <InputGroup label="Nacionalidad" icon={<Globe className="w-3 h-3"/>} value={formData.nationality} onChange={v => setFormData({...formData, nationality: v})} placeholder="Chilena" isDark={isDark} required />
-                <InputGroup label="Residencia" icon={<MapPin className="w-3 h-3"/>} value={formData.residenceCountry} onChange={v => setFormData({...formData, residenceCountry: v})} placeholder="Chile" isDark={isDark} required />
-                <InputGroup label="F. Nacimiento" icon={<Calendar className="w-3 h-3"/>} type="date" value={formData.birthDate} onChange={v => setFormData({...formData, birthDate: v})} isDark={isDark} required />
-                <InputGroup label="F. Incorporación" icon={<Calendar className="w-3 h-3"/>} type="date" value={formData.joinDate} onChange={v => setFormData({...formData, joinDate: v})} isDark={isDark} required />
-                <InputGroup label="Correo" icon={<Mail className="w-3 h-3"/>} type="email" value={formData.email} onChange={v => setFormData({...formData, email: v})} placeholder="name@amis.health" isDark={isDark} required />
-                <InputGroup label="Teléfono" icon={<Phone className="w-3 h-3"/>} type="tel" value={formData.phone} onChange={v => setFormData({...formData, phone: v})} placeholder="+56 9 ..." isDark={isDark} required />
+                <InputGroup label="Nombre" value={formData.firstName} onChange={v => setFormData({ ...formData, firstName: v })} placeholder="Isaac" isDark={isDark} required />
+                <InputGroup label="Apellidos" value={formData.lastName} onChange={v => setFormData({ ...formData, lastName: v })} placeholder="Newton" isDark={isDark} required />
+                <InputGroup label="RUT / DNI" icon={<IdCard className="w-3 h-3" />} value={formData.idNumber} onChange={v => setFormData({ ...formData, idNumber: v })} placeholder="12.345.678-9" isDark={isDark} required />
+                <InputGroup label="Nacionalidad" icon={<Globe className="w-3 h-3" />} value={formData.nationality} onChange={v => setFormData({ ...formData, nationality: v })} placeholder="Chilena" isDark={isDark} required />
+
+                <div className="md:col-span-2 grid grid-cols-2 gap-6">
+                  <InputGroup label="País Residencia" icon={<Globe className="w-3 h-3" />} value={formData.residenceCountry} onChange={v => setFormData({ ...formData, residenceCountry: v })} placeholder="Chile" isDark={isDark} required />
+                  <InputGroup label="Ciudad Residencia" icon={<MapPin className="w-3 h-3" />} value={formData.residenceCity} onChange={v => setFormData({ ...formData, residenceCity: v })} placeholder="Santiago" isDark={isDark} required />
+                </div>
+
+                <InputGroup label="F. Nacimiento" icon={<Calendar className="w-3 h-3" />} type="date" value={formData.birthDate} onChange={v => setFormData({ ...formData, birthDate: v })} isDark={isDark} required />
+                <InputGroup label="F. Incorporación" icon={<Calendar className="w-3 h-3" />} type="date" value={formData.joinDate} onChange={v => setFormData({ ...formData, joinDate: v })} isDark={isDark} required />
+                <InputGroup label="Correo" icon={<Mail className="w-3 h-3" />} type="email" value={formData.email} onChange={v => setFormData({ ...formData, email: v })} placeholder="name@amis.health" isDark={isDark} required />
+                <InputGroup label="Teléfono" icon={<Phone className="w-3 h-3" />} type="tel" value={formData.phone} onChange={v => setFormData({ ...formData, phone: v })} placeholder="+56 9 ..." isDark={isDark} required />
+
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 mb-2"><Activity className="w-3 h-3"/> Estado Laboral</label>
-                  <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className={`w-full p-4 rounded-xl border outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                  <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 mb-2"><Activity className="w-3 h-3" /> Estado Laboral</label>
+                  <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value as any })} className={`w-full p-4 rounded-xl border outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                     <option value="Activo">Activo</option>
                     <option value="Licencia Médica">Licencia Médica</option>
                     <option value="Vacaciones">Vacaciones</option>
@@ -100,21 +124,39 @@ const EmployeeForm: React.FC<Props> = ({ isDark, onClose, onSubmit }) => {
                     <option value="Baja Temporal">Baja Temporal</option>
                   </select>
                 </div>
+
+                {showTerminationDate && (
+                  <InputGroup label="Fecha de Baja" icon={<Calendar className="w-3 h-3" />} type="date" value={formData.terminationDate} onChange={v => setFormData({ ...formData, terminationDate: v })} isDark={isDark} required />
+                )}
               </div>
 
               <div className={`p-8 rounded-3xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'} grid grid-cols-1 md:grid-cols-2 gap-6`}>
-                <InputGroup className="md:col-span-2" label="Universidad" icon={<School className="w-3 h-3"/>} value={formData.university} onChange={v => setFormData({...formData, university: v})} placeholder="Casa de estudios" isDark={isDark} required />
+                <InputGroup label="Universidad" icon={<School className="w-3 h-3" />} value={formData.university} onChange={v => setFormData({ ...formData, university: v })} placeholder="Casa de estudios" isDark={isDark} required />
+                <InputGroup label="Registro Superintendencia" icon={<AwardIcon className="w-3 h-3" />} value={formData.superintendenciaId} onChange={v => setFormData({ ...formData, superintendenciaId: v })} placeholder="Número de registro" isDark={isDark} />
+
                 <div className="space-y-2">
                   <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-2">Cargo</label>
-                  <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as any})} className={`w-full p-4 rounded-xl border outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                  <select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as any })} className={`w-full p-4 rounded-xl border outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                     <option value="Médico">Médico</option>
                     <option value="Técnico">Técnico</option>
                     <option value="Enfermería">Enfermería</option>
                     <option value="Administrativo">Administrativo</option>
                   </select>
                 </div>
-                <InputGroup label="Departamento" value={formData.department} onChange={v => setFormData({...formData, department: v})} placeholder="Radiología" isDark={isDark} required />
-                <InputGroup className="md:col-span-2" label="Subespecialidad" icon={<AwardIcon className="w-3 h-3"/>} value={formData.subSpecialty} onChange={v => setFormData({...formData, subSpecialty: v})} placeholder="Neurorradiología" isDark={isDark} />
+                <InputGroup label="Departamento" value={formData.department} onChange={v => setFormData({ ...formData, department: v })} placeholder="Radiología" isDark={isDark} required />
+                <InputGroup className="md:col-span-2" label="Subespecialidad" icon={<AwardIcon className="w-3 h-3" />} value={formData.subSpecialty} onChange={v => setFormData({ ...formData, subSpecialty: v })} placeholder="Neurorradiología" isDark={isDark} />
+              </div>
+
+              <div className={`p-8 rounded-3xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'} grid grid-cols-1 md:grid-cols-2 gap-6`}>
+                <InputGroup label="Nombre Usuario" icon={<User className="w-3 h-3" />} value={formData.username} onChange={v => setFormData({ ...formData, username: v })} placeholder="usuario.amis" isDark={isDark} />
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-40 mb-2"><PenTool className="w-3 h-3" /> Tipo de Firma</label>
+                  <select value={formData.signatureType} onChange={e => setFormData({ ...formData, signatureType: e.target.value as any })} className={`w-full p-4 rounded-xl border outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                    <option value="Firma Simple">Firma Simple</option>
+                    <option value="Firma Avanzada">Firma Avanzada</option>
+                    <option value="Firma Digital">Firma Digital</option>
+                  </select>
+                </div>
               </div>
             </div>
           </div>
