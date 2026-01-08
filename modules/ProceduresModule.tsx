@@ -14,17 +14,17 @@ type TimeFilter = 'month' | 'six_months' | 'year' | 'all';
 
 const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
   const { employees } = useEmployees();
-  const { 
-    procedures, 
-    catalog, 
-    addProcedure, 
-    updateProcedure, 
-    toggleRequirement, 
+  const {
+    procedures,
+    catalog,
+    addProcedure,
+    updateProcedure,
+    toggleRequirement,
     deleteProcedure,
     updateCatalogItem,
     addCatalogItem
   } = useProcedures();
-  
+
   const [showModal, setShowModal] = useState(false);
   const [editingProcedureId, setEditingProcedureId] = useState<string | null>(null);
   const [showCatalogModal, setShowCatalogModal] = useState(false);
@@ -41,12 +41,12 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
   const userFilteredProcedures = useMemo(() => {
     let base = procedures;
     if (currentUser.role === 'Médico' || currentUser.role === 'Técnico') {
-       base = procedures.filter(p => p.radiologistId === currentUser.id);
+      base = procedures.filter(p => p.radiologistId === currentUser.id);
     }
-    
+
     return base.filter(p => {
-      const matchSearch = p.patientName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          p.patientRut.includes(searchTerm);
+      const matchSearch = p.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.patientRut.includes(searchTerm);
       const matchStatus = statusFilter === 'All' || p.status === statusFilter;
       const matchDoctor = doctorFilter === 'All' || p.radiologistId === doctorFilter;
       return matchSearch && matchStatus && matchDoctor;
@@ -81,13 +81,13 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
   const pendingDocs = userFilteredProcedures.filter(p => p.status === 'Pendiente Docs').length;
   const readyToSchedule = userFilteredProcedures.filter(p => p.status === 'Listo').length;
 
-  const editingProcedure = useMemo(() => 
+  const editingProcedure = useMemo(() =>
     editingProcedureId ? procedures.find(p => p.id === editingProcedureId) : null
-  , [editingProcedureId, procedures]);
+    , [editingProcedureId, procedures]);
 
-  const schedulingProcedure = useMemo(() => 
+  const schedulingProcedure = useMemo(() =>
     showSchedulingModalId ? procedures.find(p => p.id === showSchedulingModalId) : null
-  , [showSchedulingModalId, procedures]);
+    , [showSchedulingModalId, procedures]);
 
   const handleEditClick = (id: string) => {
     setEditingProcedureId(id);
@@ -109,14 +109,14 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
         </div>
         <div className="flex gap-4">
           {(currentUser.role === 'Superuser' || currentUser.role === 'Administrativo') && (
-            <button 
+            <button
               onClick={() => setShowCatalogModal(true)}
               className={`px-8 py-5 border rounded-[24px] font-black text-[11px] uppercase tracking-widest flex items-center gap-3 transition-all hover:bg-slate-100 dark:hover:bg-slate-800 ${isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'}`}
             >
               <Settings className="w-5 h-5" /> Catálogo
             </button>
           )}
-          <button 
+          <button
             onClick={() => setShowModal(true)}
             className="px-8 py-5 bg-blue-600 text-white rounded-[24px] font-black text-[11px] uppercase tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-2xl shadow-blue-500/30"
           >
@@ -144,7 +144,7 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
                 <button onClick={() => setViewMode('stats')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'stats' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Análisis</button>
               )}
             </div>
-            
+
             {viewMode === 'stats' && (
               <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl animate-in fade-in zoom-in duration-300">
                 <button onClick={() => setTimeFilter('month')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${timeFilter === 'month' ? 'bg-indigo-600 text-white shadow-sm' : 'opacity-40'}`}>Este Mes</button>
@@ -174,13 +174,25 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
                       <div className="w-14 h-14 rounded-2xl bg-blue-600/10 text-blue-600 flex items-center justify-center"><Stethoscope className="w-7 h-7" /></div>
                       <div>
                         <h4 className="text-xl font-black uppercase tracking-tight">{proc.procedureType || 'Sin Procedimiento'}</h4>
-                        <p className="text-blue-600 font-black text-xs uppercase tracking-widest mb-1">{proc.patientName || 'Paciente S.N.'}</p>
-                        <p className="text-[10px] opacity-40 font-black uppercase tracking-widest">{proc.clinicalCenter || 'Sede no asignada'} • {rad ? `Dr. ${rad.lastName}` : 'Sin Médico'}</p>
+                        <div className="flex items-center gap-3 mb-1">
+                          <p className="text-blue-600 font-black text-xs uppercase tracking-widest">{proc.patientName || 'Paciente S.N.'}</p>
+                          {proc.takesAnticoagulants && (
+                            <span className="px-3 py-1 bg-rose-500/10 text-rose-500 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                              <Info className="w-3 h-3" /> Anticoagulante
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] opacity-40 font-black uppercase tracking-widest">
+                          {proc.patientRut} {proc.patientInsurance ? `• ${proc.patientInsurance}` : ''}
+                        </p>
+                        <p className="text-[10px] opacity-40 font-black uppercase tracking-widest">
+                          {proc.clinicalCenter || 'Sede no asignada'} • {rad ? `Dr. ${rad.lastName}` : 'Sin Médico'}
+                        </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <StatusBadge status={proc.status} />
-                      <button 
+                      <button
                         onClick={() => handleEditClick(proc.id)}
                         className="p-2.5 rounded-xl hover:bg-blue-600/10 text-blue-600 transition-all opacity-40 hover:opacity-100"
                         title="Editar Procedimiento"
@@ -190,7 +202,7 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
                     </div>
                   </div>
                   <div className="flex justify-end gap-3 mt-6">
-                     <button onClick={() => setShowSchedulingModalId(proc.id)} className="px-6 py-3 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest">Gestionar Cita</button>
+                    <button onClick={() => setShowSchedulingModalId(proc.id)} className="px-6 py-3 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest">Gestionar Cita</button>
                   </div>
                 </div>
               );
@@ -201,52 +213,52 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
         {viewMode === 'calendar' && (
           <EnhancedCalendar isDark={isDark} procedures={userFilteredProcedures} onEdit={(id: any) => setShowSchedulingModalId(id)} />
         )}
-        
+
         {viewMode === 'stats' && (
           <ProceduresStats isDark={isDark} filteredProcedures={statsFilteredProcedures} radiologists={radiologists} />
         )}
       </div>
 
       {showCatalogModal && (
-        <CatalogModal 
-          isDark={isDark} 
-          catalog={catalog} 
-          onClose={() => setShowCatalogModal(false)} 
-          onUpdate={updateCatalogItem} 
-          onAdd={addCatalogItem} 
+        <CatalogModal
+          isDark={isDark}
+          catalog={catalog}
+          onClose={() => setShowCatalogModal(false)}
+          onUpdate={updateCatalogItem}
+          onAdd={addCatalogItem}
         />
       )}
-      
+
       {showModal && (
-        <ProcedureForm 
-          isDark={isDark} 
-          radiologists={radiologists} 
-          catalog={catalog} 
+        <ProcedureForm
+          isDark={isDark}
+          radiologists={radiologists}
+          catalog={catalog}
           initialData={editingProcedure || undefined}
-          onClose={handleCloseForm} 
-          onSubmit={async (data: any) => { 
+          onClose={handleCloseForm}
+          onSubmit={async (data: any) => {
             if (editingProcedureId) {
               await updateProcedure(editingProcedureId, data);
             } else {
-              await addProcedure(data); 
+              await addProcedure(data);
             }
-            handleCloseForm(); 
-          }} 
+            handleCloseForm();
+          }}
         />
       )}
 
       {schedulingProcedure && (
-        <SchedulingModal 
-          isDark={isDark} 
-          procedure={schedulingProcedure} 
-          onClose={() => setShowSchedulingModalId(null)} 
-          onSchedule={async (id: string, date: string) => { 
-            await updateProcedure(id, { scheduledDate: date, status: 'Programado' }); 
-            setShowSchedulingModalId(null); 
+        <SchedulingModal
+          isDark={isDark}
+          procedure={schedulingProcedure}
+          onClose={() => setShowSchedulingModalId(null)}
+          onSchedule={async (id: string, date: string) => {
+            await updateProcedure(id, { scheduledDate: date, status: 'Programado' });
+            setShowSchedulingModalId(null);
           }}
           onToggleReq={toggleRequirement}
           onAttach={async (procId: string, reqId: string, fileUrl: string) => {
-            const updatedReqs = schedulingProcedure.requirements.map(r => 
+            const updatedReqs = schedulingProcedure.requirements.map(r =>
               r.id === reqId ? { ...r, fileUrl, isCompleted: true } : r
             );
             await updateProcedure(procId, { requirements: updatedReqs });
@@ -304,84 +316,84 @@ const ProceduresStats = ({ isDark, filteredProcedures, radiologists }: any) => {
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* KPI Overlays */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-         <StatsMiniCard label="Volumen Total" val={statsData.totalExams} icon={<TrendingUp className="text-blue-500" />} isDark={isDark} />
-         <StatsMiniCard label="Venta Bruta" val={`$${statsData.totalValue.toLocaleString()}`} icon={<DollarSign className="text-emerald-500" />} isDark={isDark} />
-         <StatsMiniCard label="Ticket Promedio" val={`$${statsData.avgTicket.toLocaleString()}`} icon={<Target className="text-indigo-500" />} isDark={isDark} />
-         <StatsMiniCard label="Efectividad" val={statsData.totalExams > 0 ? `${Math.round((statsData.completedExams / statsData.totalExams) * 100)}%` : '0%'} icon={<CheckCircle2 className="text-blue-600" />} isDark={isDark} />
+        <StatsMiniCard label="Volumen Total" val={statsData.totalExams} icon={<TrendingUp className="text-blue-500" />} isDark={isDark} />
+        <StatsMiniCard label="Venta Bruta" val={`$${statsData.totalValue.toLocaleString()}`} icon={<DollarSign className="text-emerald-500" />} isDark={isDark} />
+        <StatsMiniCard label="Ticket Promedio" val={`$${statsData.avgTicket.toLocaleString()}`} icon={<Target className="text-indigo-500" />} isDark={isDark} />
+        <StatsMiniCard label="Efectividad" val={statsData.totalExams > 0 ? `${Math.round((statsData.completedExams / statsData.totalExams) * 100)}%` : '0%'} icon={<CheckCircle2 className="text-blue-600" />} isDark={isDark} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-10">
         {/* breakdown by doctor */}
         <div className={`p-10 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-           <div className="flex items-center gap-4 mb-10">
-              <div className="p-3 bg-blue-600/10 text-blue-600 rounded-2xl"><Users className="w-6 h-6" /></div>
-              <h4 className="text-xl font-black uppercase tracking-tighter">Producción por Staff</h4>
-           </div>
-           <div className="space-y-8">
-              {statsData.byDoctor.length === 0 ? (
-                <p className="text-center opacity-20 py-10 font-black uppercase text-xs tracking-widest">Sin datos en el periodo</p>
-              ) : statsData.byDoctor.map((item, idx) => (
-                <div key={idx} className="space-y-2">
-                   <div className="flex justify-between items-end">
-                      <span className="text-xs font-black uppercase tracking-tight">{item.name}</span>
-                      <span className="text-[10px] font-black opacity-40 uppercase">${item.value.toLocaleString()} ({item.count} ex.)</span>
-                   </div>
-                   <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-blue-600 rounded-full transition-all duration-1000" 
-                        style={{ width: `${(item.value / (statsData.totalValue || 1)) * 100}%` }} 
-                      />
-                   </div>
+          <div className="flex items-center gap-4 mb-10">
+            <div className="p-3 bg-blue-600/10 text-blue-600 rounded-2xl"><Users className="w-6 h-6" /></div>
+            <h4 className="text-xl font-black uppercase tracking-tighter">Producción por Staff</h4>
+          </div>
+          <div className="space-y-8">
+            {statsData.byDoctor.length === 0 ? (
+              <p className="text-center opacity-20 py-10 font-black uppercase text-xs tracking-widest">Sin datos en el periodo</p>
+            ) : statsData.byDoctor.map((item, idx) => (
+              <div key={idx} className="space-y-2">
+                <div className="flex justify-between items-end">
+                  <span className="text-xs font-black uppercase tracking-tight">{item.name}</span>
+                  <span className="text-[10px] font-black opacity-40 uppercase">${item.value.toLocaleString()} ({item.count} ex.)</span>
                 </div>
-              ))}
-           </div>
+                <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 rounded-full transition-all duration-1000"
+                    style={{ width: `${(item.value / (statsData.totalValue || 1)) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* breakdown by center */}
         <div className={`p-10 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-           <div className="flex items-center gap-4 mb-10">
-              <div className="p-3 bg-indigo-600/10 text-indigo-600 rounded-2xl"><Building2 className="w-6 h-6" /></div>
-              <h4 className="text-xl font-black uppercase tracking-tighter">Desempeño por Sedes</h4>
-           </div>
-           <div className="space-y-8">
-              {statsData.byCenter.length === 0 ? (
-                <p className="text-center opacity-20 py-10 font-black uppercase text-xs tracking-widest">Sin datos en el periodo</p>
-              ) : statsData.byCenter.map((item, idx) => (
-                <div key={idx} className="space-y-2">
-                   <div className="flex justify-between items-end">
-                      <span className="text-xs font-black uppercase tracking-tight">{item.name}</span>
-                      <span className="text-[10px] font-black opacity-40 uppercase">${item.value.toLocaleString()}</span>
-                   </div>
-                   <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-indigo-600 rounded-full transition-all duration-1000" 
-                        style={{ width: `${(item.value / (statsData.totalValue || 1)) * 100}%` }} 
-                      />
-                   </div>
+          <div className="flex items-center gap-4 mb-10">
+            <div className="p-3 bg-indigo-600/10 text-indigo-600 rounded-2xl"><Building2 className="w-6 h-6" /></div>
+            <h4 className="text-xl font-black uppercase tracking-tighter">Desempeño por Sedes</h4>
+          </div>
+          <div className="space-y-8">
+            {statsData.byCenter.length === 0 ? (
+              <p className="text-center opacity-20 py-10 font-black uppercase text-xs tracking-widest">Sin datos en el periodo</p>
+            ) : statsData.byCenter.map((item, idx) => (
+              <div key={idx} className="space-y-2">
+                <div className="flex justify-between items-end">
+                  <span className="text-xs font-black uppercase tracking-tight">{item.name}</span>
+                  <span className="text-[10px] font-black opacity-40 uppercase">${item.value.toLocaleString()}</span>
                 </div>
-              ))}
-           </div>
+                <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-indigo-600 rounded-full transition-all duration-1000"
+                    style={{ width: `${(item.value / (statsData.totalValue || 1)) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Breakdown by Type */}
         <div className={`p-10 rounded-[48px] border lg:col-span-2 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-           <div className="flex items-center gap-4 mb-10">
-              <div className="p-3 bg-emerald-600/10 text-emerald-600 rounded-2xl"><PieChart className="w-6 h-6" /></div>
-              <h4 className="text-xl font-black uppercase tracking-tighter">Mix de Procedimientos</h4>
-           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {statsData.byType.map((item, idx) => (
-                <div key={idx} className="p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                   <div>
-                      <p className="text-[10px] font-black uppercase opacity-30 mb-1 tracking-widest">{item.name}</p>
-                      <h5 className="text-2xl font-black">{item.count}</h5>
-                   </div>
-                   <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                      <Activity className="w-4 h-4 text-emerald-600" />
-                   </div>
+          <div className="flex items-center gap-4 mb-10">
+            <div className="p-3 bg-emerald-600/10 text-emerald-600 rounded-2xl"><PieChart className="w-6 h-6" /></div>
+            <h4 className="text-xl font-black uppercase tracking-tighter">Mix de Procedimientos</h4>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {statsData.byType.map((item, idx) => (
+              <div key={idx} className="p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase opacity-30 mb-1 tracking-widest">{item.name}</p>
+                  <h5 className="text-2xl font-black">{item.count}</h5>
                 </div>
-              ))}
-           </div>
+                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                  <Activity className="w-4 h-4 text-emerald-600" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -453,6 +465,10 @@ const ProcedureForm = ({ isDark, radiologists, catalog, onClose, onSubmit, initi
   const [patientRut, setPatientRut] = useState(initialData?.patientRut || '');
   const [patientPhone, setPatientPhone] = useState(initialData?.patientPhone || '');
   const [patientEmail, setPatientEmail] = useState(initialData?.patientEmail || '');
+  const [patientInsurance, setPatientInsurance] = useState(initialData?.patientInsurance || '');
+  const [patientBirthDate, setPatientBirthDate] = useState(initialData?.patientBirthDate || '');
+  const [patientAddress, setPatientAddress] = useState(initialData?.patientAddress || '');
+  const [takesAnticoagulants, setTakesAnticoagulants] = useState(initialData?.takesAnticoagulants || false);
   const [catItemId, setCatItemId] = useState('');
   const [radiologistId, setRadiologistId] = useState(initialData?.radiologistId || '');
   const [clinicalCenter, setClinicalCenter] = useState(initialData?.clinicalCenter || '');
@@ -469,12 +485,16 @@ const ProcedureForm = ({ isDark, radiologists, catalog, onClose, onSubmit, initi
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const baseData = {
       patientName,
       patientRut,
       patientPhone,
       patientEmail,
+      patientInsurance,
+      patientBirthDate,
+      patientAddress,
+      takesAnticoagulants,
       procedureType: selectedItem?.name || '',
       value: selectedItem?.baseValue || 0,
       modality: selectedItem?.defaultModality || 'US',
@@ -514,6 +534,29 @@ const ProcedureForm = ({ isDark, radiologists, catalog, onClose, onSubmit, initi
             <div className="col-span-2">
               <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Correo Electrónico</label>
               <input type="email" value={patientEmail} onChange={e => setPatientEmail(e.target.value)} placeholder="paciente@ejemplo.com" className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-600' : 'bg-slate-50 border-slate-100 focus:bg-white'}`} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Previsión Salud</label>
+              <input value={patientInsurance} onChange={e => setPatientInsurance(e.target.value)} placeholder="Ej. Fonasa, Isapre..." className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-600' : 'bg-slate-50 border-slate-100 focus:bg-white'}`} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Fecha de Nacimiento</label>
+              <input type="date" value={patientBirthDate} onChange={e => setPatientBirthDate(e.target.value)} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-600' : 'bg-slate-50 border-slate-100 focus:bg-white'}`} />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Dirección Particular</label>
+              <input value={patientAddress} onChange={e => setPatientAddress(e.target.value)} placeholder="Calle, Número, Ciudad" className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-600' : 'bg-slate-50 border-slate-100 focus:bg-white'}`} />
+            </div>
+            <div className="col-span-2">
+              <label className="flex items-center gap-4 p-5 rounded-2xl border cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                <input type="checkbox" checked={takesAnticoagulants} onChange={e => setTakesAnticoagulants(e.target.checked)} className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-600" />
+                <span className="text-[10px] font-black uppercase tracking-widest opacity-60">¿El paciente toma anticoagulantes?</span>
+                {takesAnticoagulants && (
+                  <span className="ml-auto text-rose-500 font-black text-[9px] uppercase tracking-widest flex items-center gap-2">
+                    <Info className="w-4 h-4" /> Alerta Médica
+                  </span>
+                )}
+              </label>
             </div>
           </div>
 
@@ -563,9 +606,9 @@ const CatalogModal = ({ isDark, catalog, onClose, onUpdate, onAdd }: any) => {
   };
 
   const handleEditInit = (item: ProcedureCatalogItem) => {
-    setFormData({ 
-      name: item.name, 
-      baseValue: item.baseValue, 
+    setFormData({
+      name: item.name,
+      baseValue: item.baseValue,
       defaultModality: item.defaultModality,
       requiredDocs: item.requiredDocs || []
     });
@@ -610,9 +653,9 @@ const CatalogModal = ({ isDark, catalog, onClose, onUpdate, onAdd }: any) => {
           {(isAdding || editingItemId) && (
             <div className="p-8 rounded-[40px] border-2 border-dashed border-blue-500/30 bg-blue-500/5 animate-in slide-in-from-top-4 space-y-6">
               <div className="flex items-center gap-6">
-                <input autoFocus placeholder="Nombre procedimiento..." value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="flex-grow bg-transparent outline-none font-black text-xl uppercase tracking-tight" />
-                <input type="number" placeholder="Valor $" value={formData.baseValue} onChange={e => setFormData({...formData, baseValue: Number(e.target.value)})} className="w-32 bg-transparent outline-none font-black text-lg border-b border-blue-500/20" />
-                <select value={formData.defaultModality} onChange={e => setFormData({...formData, defaultModality: e.target.value as any})} className="bg-transparent outline-none font-black text-xs uppercase tracking-widest border-b border-blue-500/20">
+                <input autoFocus placeholder="Nombre procedimiento..." value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="flex-grow bg-transparent outline-none font-black text-xl uppercase tracking-tight" />
+                <input type="number" placeholder="Valor $" value={formData.baseValue} onChange={e => setFormData({ ...formData, baseValue: Number(e.target.value) })} className="w-32 bg-transparent outline-none font-black text-lg border-b border-blue-500/20" />
+                <select value={formData.defaultModality} onChange={e => setFormData({ ...formData, defaultModality: e.target.value as any })} className="bg-transparent outline-none font-black text-xs uppercase tracking-widest border-b border-blue-500/20">
                   <option value="US">US</option>
                   <option value="TAC">TAC</option>
                   <option value="RM">RM</option>
@@ -620,24 +663,24 @@ const CatalogModal = ({ isDark, catalog, onClose, onUpdate, onAdd }: any) => {
                   <option value="Mamografía">Mamografía</option>
                 </select>
               </div>
-              
+
               <div className="space-y-3">
-                 <label className="block text-[10px] font-black uppercase tracking-widest opacity-40">Listado de Documentación Requerida (Pulsa Enter para añadir)</label>
-                 <div className={`flex flex-wrap gap-2 p-4 rounded-2xl border transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                    {formData.requiredDocs.map((doc, idx) => (
-                      <span key={idx} className="bg-blue-600 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm animate-in zoom-in-90">
-                        {doc} <X className="w-3 h-3 cursor-pointer hover:scale-125" onClick={() => setFormData({...formData, requiredDocs: formData.requiredDocs.filter((_, i) => i !== idx)})} />
-                      </span>
-                    ))}
-                    <input 
-                      type="text" 
-                      value={docInput} 
-                      onChange={e => setDocInput(e.target.value)} 
-                      onKeyDown={handleAddDocTag}
-                      placeholder="Añadir requisito..." 
-                      className="flex-grow bg-transparent outline-none text-xs font-bold p-1 min-w-[150px]" 
-                    />
-                 </div>
+                <label className="block text-[10px] font-black uppercase tracking-widest opacity-40">Listado de Documentación Requerida (Pulsa Enter para añadir)</label>
+                <div className={`flex flex-wrap gap-2 p-4 rounded-2xl border transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                  {formData.requiredDocs.map((doc, idx) => (
+                    <span key={idx} className="bg-blue-600 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm animate-in zoom-in-90">
+                      {doc} <X className="w-3 h-3 cursor-pointer hover:scale-125" onClick={() => setFormData({ ...formData, requiredDocs: formData.requiredDocs.filter((_, i) => i !== idx) })} />
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    value={docInput}
+                    onChange={e => setDocInput(e.target.value)}
+                    onKeyDown={handleAddDocTag}
+                    placeholder="Añadir requisito..."
+                    className="flex-grow bg-transparent outline-none text-xs font-bold p-1 min-w-[150px]"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-4">
@@ -662,13 +705,13 @@ const CatalogModal = ({ isDark, catalog, onClose, onUpdate, onAdd }: any) => {
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <button 
+                  <button
                     onClick={() => onUpdate(item.id, { active: !item.active })}
                     className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest transition-all ${item.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}
                   >
                     {item.active ? 'Activo' : 'Inactivo'}
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleEditInit(item)}
                     className="p-3 rounded-xl hover:bg-blue-600/10 text-blue-600 transition-all opacity-40 hover:opacity-100"
                     title="Editar Definición de Catálogo"
@@ -677,29 +720,29 @@ const CatalogModal = ({ isDark, catalog, onClose, onUpdate, onAdd }: any) => {
                   </button>
                 </div>
               </div>
-              
+
               {/* Requirements Preview */}
               <div className="pt-4 border-t border-slate-200/50 dark:border-slate-700/50">
-                 <div className="flex items-center gap-3 mb-3">
-                    <ClipboardCheck className="w-3.5 h-3.5 opacity-30" />
-                    <p className="text-[9px] font-black uppercase tracking-widest opacity-30">Documentos Requeridos por Protocolo</p>
-                 </div>
-                 <div className="flex flex-wrap gap-2">
-                    {item.requiredDocs?.length > 0 ? item.requiredDocs.map((doc: string, idx: number) => (
-                      <span key={idx} className="px-3 py-1.5 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl text-[8px] font-black uppercase tracking-tight opacity-60">
-                        {doc}
-                      </span>
-                    )) : (
-                      <p className="text-[8px] font-black uppercase opacity-20 italic">Sin documentos específicos definidos</p>
-                    )}
-                 </div>
+                <div className="flex items-center gap-3 mb-3">
+                  <ClipboardCheck className="w-3.5 h-3.5 opacity-30" />
+                  <p className="text-[9px] font-black uppercase tracking-widest opacity-30">Documentos Requeridos por Protocolo</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {item.requiredDocs?.length > 0 ? item.requiredDocs.map((doc: string, idx: number) => (
+                    <span key={idx} className="px-3 py-1.5 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl text-[8px] font-black uppercase tracking-tight opacity-60">
+                      {doc}
+                    </span>
+                  )) : (
+                    <p className="text-[8px] font-black uppercase opacity-20 italic">Sin documentos específicos definidos</p>
+                  )}
+                </div>
               </div>
             </div>
           ))}
         </div>
 
         <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800 text-center">
-           <button onClick={onClose} className="px-10 py-4 font-black text-[10px] uppercase opacity-40 hover:opacity-100 transition-opacity">Cerrar Catálogo</button>
+          <button onClick={onClose} className="px-10 py-4 font-black text-[10px] uppercase opacity-40 hover:opacity-100 transition-opacity">Cerrar Catálogo</button>
         </div>
       </div>
     </div>
@@ -739,11 +782,20 @@ const SchedulingModal = ({ isDark, procedure, onClose, onSchedule, onToggleReq, 
       <div className="absolute inset-0" onClick={onClose} />
       <div className={`relative w-full max-w-2xl p-12 rounded-[56px] border animate-in zoom-in-95 duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
         <div className="flex items-center justify-between mb-8">
-           <div>
-              <h3 className="text-3xl font-black uppercase tracking-tighter leading-none mb-2">Gestionar Cita</h3>
-              <p className="text-blue-600 font-black text-xs uppercase tracking-widest">{procedure.patientName || 'Paciente S.N.'}</p>
-           </div>
-           <button onClick={onClose} className="p-3 opacity-40 hover:opacity-100"><X className="w-6 h-6" /></button>
+          <div>
+            <h3 className="text-3xl font-black uppercase tracking-tighter leading-none mb-2">Gestionar Cita</h3>
+            <p className="text-blue-600 font-black text-xs uppercase tracking-widest">{procedure.patientName || 'Paciente S.N.'} • {procedure.patientRut}</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+              {procedure.patientInsurance && <p className="text-[10px] opacity-40 font-bold uppercase tracking-widest">Previsión: {procedure.patientInsurance}</p>}
+              {procedure.patientBirthDate && <p className="text-[10px] opacity-40 font-bold uppercase tracking-widest">Nacimiento: {new Date(procedure.patientBirthDate).toLocaleDateString()}</p>}
+              {procedure.takesAnticoagulants && (
+                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-rose-500/10 text-rose-500 rounded-md text-[9px] font-black uppercase tracking-widest">
+                  <Info className="w-3 h-3" /> Anticoagulante
+                </div>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} className="p-3 opacity-40 hover:opacity-100"><X className="w-6 h-6" /></button>
         </div>
 
         <div className="space-y-8">
@@ -756,7 +808,7 @@ const SchedulingModal = ({ isDark, procedure, onClose, onSchedule, onToggleReq, 
               {procedure.requirements.map(req => (
                 <div key={req.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 group">
                   <div className="flex items-center gap-4">
-                    <button 
+                    <button
                       onClick={() => onToggleReq(procedure.id, req.id)}
                       className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${req.isCompleted ? 'bg-emerald-500 border-emerald-500' : 'border-slate-200 dark:border-slate-700'}`}
                     >
@@ -765,18 +817,18 @@ const SchedulingModal = ({ isDark, procedure, onClose, onSchedule, onToggleReq, 
                     <span className={`text-xs font-bold uppercase ${req.isCompleted ? 'opacity-40 line-through' : ''}`}>{req.name}</span>
                   </div>
                   <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                     {req.fileUrl && (
-                       <button className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg">
-                         <Paperclip className="w-4 h-4" />
-                       </button>
-                     )}
-                     <button 
+                    {req.fileUrl && (
+                      <button className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg">
+                        <Paperclip className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button
                       onClick={() => handleFileClick(req.id)}
                       className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-600/10 rounded-lg"
                       title="Adjuntar Documento"
-                     >
-                       <UploadCloud className="w-4 h-4" />
-                     </button>
+                    >
+                      <UploadCloud className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -797,18 +849,18 @@ const SchedulingModal = ({ isDark, procedure, onClose, onSchedule, onToggleReq, 
               <input type="time" value={time} onChange={e => setTime(e.target.value)} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`} />
             </div>
           </div>
-          
+
           <div className="pt-6">
-             <button 
+            <button
               disabled={!date}
               onClick={handleConfirm}
               className="w-full py-5 bg-blue-600 text-white rounded-[32px] font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 disabled:opacity-30 transition-all hover:scale-[1.02] active:scale-95"
-             >
-               Confirmar en Agenda
-             </button>
-             {!allRequirementsMet && (
-               <p className="text-center text-[9px] font-black uppercase opacity-30 mt-4 tracking-widest">Procedimiento agendado con documentación parcial</p>
-             )}
+            >
+              Confirmar en Agenda
+            </button>
+            {!allRequirementsMet && (
+              <p className="text-center text-[9px] font-black uppercase opacity-30 mt-4 tracking-widest">Procedimiento agendado con documentación parcial</p>
+            )}
           </div>
         </div>
       </div>

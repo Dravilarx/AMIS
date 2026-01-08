@@ -4,43 +4,43 @@ import { ProcedureEntry, ProcedureStatus, ProcedureRequirement, ProcedureCatalog
 import { db } from '../services/db';
 
 const INITIAL_CATALOG: ProcedureCatalogItem[] = [
-  { 
-    id: 'cat-1', 
-    name: 'Biopsia Core de Mama', 
-    baseValue: 380000, 
-    defaultModality: 'US', 
+  {
+    id: 'cat-1',
+    name: 'Biopsia Core de Mama',
+    baseValue: 380000,
+    defaultModality: 'US',
     active: true,
     requiredDocs: ['Consentimiento Informado', 'Mamografía de Referencia', 'Pruebas Coagulación', 'Orden Médica']
   },
-  { 
-    id: 'cat-2', 
-    name: 'Infiltración Articular Cadera', 
-    baseValue: 220000, 
-    defaultModality: 'TAC', 
+  {
+    id: 'cat-2',
+    name: 'Infiltración Articular Cadera',
+    baseValue: 220000,
+    defaultModality: 'TAC',
     active: true,
     requiredDocs: ['Consentimiento Informado', 'Evaluación Previa', 'Orden Médica']
   },
-  { 
-    id: 'cat-3', 
-    name: 'PAAF de Tiroides', 
-    baseValue: 150000, 
-    defaultModality: 'US', 
+  {
+    id: 'cat-3',
+    name: 'PAAF de Tiroides',
+    baseValue: 150000,
+    defaultModality: 'US',
     active: true,
     requiredDocs: ['Consentimiento Informado', 'Orden Médica', 'Eco Tiroides Previa']
   },
-  { 
-    id: 'cat-4', 
-    name: 'Nefrostomía Percutánea', 
-    baseValue: 650000, 
-    defaultModality: 'TAC', 
+  {
+    id: 'cat-4',
+    name: 'Nefrostomía Percutánea',
+    baseValue: 650000,
+    defaultModality: 'TAC',
     active: true,
     requiredDocs: ['Consentimiento Informado', 'Creatinina/Función Renal', 'Pruebas Coagulación', 'Orden Médica']
   },
-  { 
-    id: 'cat-5', 
-    name: 'Drenaje Colección Abdominal', 
-    baseValue: 450000, 
-    defaultModality: 'US', 
+  {
+    id: 'cat-5',
+    name: 'Drenaje Colección Abdominal',
+    baseValue: 450000,
+    defaultModality: 'US',
     active: true,
     requiredDocs: ['Consentimiento Informado', 'TAC/Eco Previa', 'Pruebas Coagulación', 'Orden Médica']
   }
@@ -53,6 +53,10 @@ const INITIAL_PROCEDURES: ProcedureEntry[] = [
     patientRut: '15.678.901-2',
     patientPhone: '+56 9 9123 4455',
     patientEmail: 'mj.lopez@email.com',
+    patientInsurance: 'Fonasa',
+    patientBirthDate: '1985-05-12',
+    patientAddress: 'Av. Providencia 1234, Santiago',
+    takesAnticoagulants: true,
     procedureType: 'Biopsia Core de Mama',
     value: 380000,
     modality: 'US',
@@ -74,6 +78,10 @@ const INITIAL_PROCEDURES: ProcedureEntry[] = [
     patientRut: '10.223.441-K',
     patientPhone: '+56 9 8877 6655',
     patientEmail: 'carlos.iz@email.com',
+    patientInsurance: 'Isapre Colmena',
+    patientBirthDate: '1972-10-25',
+    patientAddress: 'Las Hualtatas 456, Vitacura',
+    takesAnticoagulants: false,
     procedureType: 'Infiltración Articular Cadera',
     value: 220000,
     modality: 'TAC',
@@ -94,7 +102,7 @@ export const useProcedures = () => {
   const [procedures, setProcedures] = useState<ProcedureEntry[]>([]);
   const [catalog, setCatalog] = useState<ProcedureCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const proceduresCol = 'procedures';
   const catalogCol = 'procedure_catalog';
 
@@ -148,7 +156,7 @@ export const useProcedures = () => {
     const proc = procedures.find(p => p.id === procId);
     if (!proc) return;
 
-    const newReqs = proc.requirements.map(r => 
+    const newReqs = proc.requirements.map(r =>
       r.id === reqId ? { ...r, isCompleted: !r.isCompleted } : r
     );
 
@@ -179,13 +187,13 @@ export const useProcedures = () => {
     setCatalog(prev => [...prev, newItem]);
   };
 
-  return { 
-    procedures, 
-    catalog, 
-    loading, 
-    addProcedure, 
-    updateProcedure, 
-    toggleRequirement, 
+  return {
+    procedures,
+    catalog,
+    loading,
+    addProcedure,
+    updateProcedure,
+    toggleRequirement,
     deleteProcedure,
     updateCatalogItem,
     addCatalogItem

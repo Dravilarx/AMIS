@@ -228,6 +228,10 @@ export interface ProcedureEntry {
   patientRut: string;
   patientPhone: string;
   patientEmail: string;
+  patientInsurance?: string;
+  patientBirthDate?: string;
+  patientAddress?: string;
+  takesAnticoagulants?: boolean;
   procedureType: string;
   value: number;
   modality: ProcedureModality;
