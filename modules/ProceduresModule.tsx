@@ -102,49 +102,58 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
   return (
     <div className="space-y-10 animate-in fade-in duration-700">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
         <div>
           <h2 className="text-5xl font-black uppercase tracking-tighter leading-none mb-2">Intervencionismo Staff</h2>
           <p className="opacity-40 text-lg font-medium italic">Gestión de procedimientos para: {currentUser.name}.</p>
         </div>
-        <div className="flex gap-4">
+
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Selector de Vista - Integrado en Cabecera */}
+          <div className="flex gap-1 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <button onClick={() => setViewMode('list')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Listado</button>
+            <button onClick={() => setViewMode('calendar')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'calendar' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Agenda</button>
+            {(currentUser.role === 'Superuser' || currentUser.role === 'Jefatura') && (
+              <button onClick={() => setViewMode('stats')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'stats' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Análisis</button>
+            )}
+          </div>
+
+          <div className="h-10 w-[1px] bg-slate-200 dark:bg-slate-800 mx-2 hidden lg:block" />
+
           {(currentUser.role === 'Superuser' || currentUser.role === 'Administrativo') && (
             <button
               onClick={() => setShowCatalogModal(true)}
-              className={`px-8 py-5 border rounded-[24px] font-black text-[11px] uppercase tracking-widest flex items-center gap-3 transition-all hover:bg-slate-100 dark:hover:bg-slate-800 ${isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'}`}
+              className={`p-4 border rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all hover:bg-slate-100 dark:hover:bg-slate-800 ${isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500 shadow-sm'}`}
             >
-              <Settings className="w-5 h-5" /> Catálogo
+              <Settings className="w-4 h-4" /> Catálogo
             </button>
           )}
           <button
             onClick={() => setShowModal(true)}
-            className="px-8 py-5 bg-blue-600 text-white rounded-[24px] font-black text-[11px] uppercase tracking-widest flex items-center gap-3 hover:scale-105 transition-all shadow-2xl shadow-blue-500/30"
+            className="px-6 py-4 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition-all shadow-xl shadow-blue-500/20"
           >
             <Plus className="w-5 h-5" /> Nuevo Caso
           </button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard label="Mi Facturación" val={`$${revenue.toLocaleString()}`} icon={<Wallet className="text-emerald-500" />} isDark={isDark} />
-        <StatCard label="Casos Pendientes" val={pendingDocs} icon={<FileText className="text-amber-500" />} isDark={isDark} />
-        <StatCard label="Por Agendar" val={readyToSchedule} icon={<CheckCircle2 className="text-blue-500" />} isDark={isDark} />
-        <StatCard label="Total Histórico" val={userFilteredProcedures.length} icon={<Activity className="text-indigo-500" />} isDark={isDark} />
+      {/* Stats Cards - Smaller & Minimalist */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Mi Facturación" val={`$${revenue.toLocaleString()}`} icon={<Wallet className="w-5 h-5 text-emerald-500" />} isDark={isDark} />
+        <StatCard label="Casos Pendientes" val={pendingDocs} icon={<FileText className="w-5 h-5 text-amber-500" />} isDark={isDark} />
+        <StatCard label="Por Agendar" val={readyToSchedule} icon={<CheckCircle2 className="w-5 h-5 text-blue-500" />} isDark={isDark} />
+        <StatCard label="Total Histórico" val={userFilteredProcedures.length} icon={<Activity className="w-5 h-5 text-indigo-500" />} isDark={isDark} />
       </div>
 
       {/* Control Bar */}
       <div className={`p-10 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
         <div className="flex flex-col xl:flex-row items-center justify-between gap-8 mb-10">
-          <div className="flex flex-wrap items-center gap-6">
-            <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
-              <button onClick={() => setViewMode('list')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Listado</button>
-              <button onClick={() => setViewMode('calendar')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'calendar' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Agenda</button>
-              {(currentUser.role === 'Superuser' || currentUser.role === 'Jefatura') && (
-                <button onClick={() => setViewMode('stats')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'stats' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Análisis</button>
-              )}
-            </div>
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-blue-600/10 text-blue-600 rounded-2xl"><CalendarDays className="w-6 h-6" /></div>
+            <h4 className="text-xl font-black uppercase tracking-tight">Gestión Operativa</h4>
+          </div>
 
+          <div className="flex flex-wrap items-center gap-6">
             {viewMode === 'stats' && (
               <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl animate-in fade-in zoom-in duration-300">
                 <button onClick={() => setTimeFilter('month')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${timeFilter === 'month' ? 'bg-indigo-600 text-white shadow-sm' : 'opacity-40'}`}>Este Mes</button>
@@ -153,119 +162,126 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
                 <button onClick={() => setTimeFilter('all')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${timeFilter === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'opacity-40'}`}>Todo</button>
               </div>
             )}
-          </div>
 
-          {viewMode !== 'stats' && (
-            <div className="relative flex-grow max-w-md w-full animate-in fade-in duration-500">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30" />
-              <input type="text" placeholder="Buscar paciente..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full pl-12 pr-4 py-4 rounded-2xl outline-none border transition-all ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500' : 'bg-slate-50 border-slate-100 focus:bg-white focus:border-blue-500'}`} />
-            </div>
-          )}
+            {viewMode !== 'stats' && (
+              <div className="relative w-full max-w-sm">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30" />
+                <input type="text" placeholder="Buscar paciente..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full pl-12 pr-4 py-3.5 rounded-2xl outline-none border transition-all text-xs font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500' : 'bg-slate-50 border-slate-100 focus:bg-white focus:border-blue-500 shadow-sm'}`} />
+              </div>
+            )}
+          </div>
         </div>
-
-        {viewMode === 'list' && (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-            {userFilteredProcedures.map(proc => {
-              const rad = radiologists.find(e => e.id === proc.radiologistId);
-              return (
-                <div key={proc.id} className={`p-8 rounded-[40px] border transition-all group hover:border-blue-500 ${isDark ? 'bg-slate-900/30 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                  <div className="flex justify-between items-start mb-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-2xl bg-blue-600/10 text-blue-600 flex items-center justify-center"><Stethoscope className="w-7 h-7" /></div>
-                      <div>
-                        <h4 className="text-xl font-black uppercase tracking-tight">{proc.procedureType || 'Sin Procedimiento'}</h4>
-                        <div className="flex items-center gap-3 mb-1">
-                          <p className="text-blue-600 font-black text-xs uppercase tracking-widest">{proc.patientName || 'Paciente S.N.'}</p>
-                          {proc.takesAnticoagulants && (
-                            <span className="px-3 py-1 bg-rose-500/10 text-rose-500 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
-                              <Info className="w-3 h-3" /> Anticoagulante
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] opacity-40 font-black uppercase tracking-widest">
-                          {proc.patientRut} {proc.patientInsurance ? `• ${proc.patientInsurance}` : ''}
-                        </p>
-                        <p className="text-[10px] opacity-40 font-black uppercase tracking-widest">
-                          {proc.clinicalCenter || 'Sede no asignada'} • {rad ? `Dr. ${rad.lastName}` : 'Sin Médico'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <StatusBadge status={proc.status} />
-                      <button
-                        onClick={() => handleEditClick(proc.id)}
-                        className="p-2.5 rounded-xl hover:bg-blue-600/10 text-blue-600 transition-all opacity-40 hover:opacity-100"
-                        title="Editar Procedimiento"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-3 mt-6">
-                    <button onClick={() => setShowSchedulingModalId(proc.id)} className="px-6 py-3 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest">Gestionar Cita</button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {viewMode === 'calendar' && (
-          <EnhancedCalendar isDark={isDark} procedures={userFilteredProcedures} onEdit={(id: any) => setShowSchedulingModalId(id)} />
-        )}
-
-        {viewMode === 'stats' && (
-          <ProceduresStats isDark={isDark} filteredProcedures={statsFilteredProcedures} radiologists={radiologists} />
-        )}
       </div>
 
-      {showCatalogModal && (
-        <CatalogModal
-          isDark={isDark}
-          catalog={catalog}
-          onClose={() => setShowCatalogModal(false)}
-          onUpdate={updateCatalogItem}
-          onAdd={addCatalogItem}
-        />
-      )}
-
-      {showModal && (
-        <ProcedureForm
-          isDark={isDark}
-          radiologists={radiologists}
-          catalog={catalog}
-          initialData={editingProcedure || undefined}
-          onClose={handleCloseForm}
-          onSubmit={async (data: any) => {
-            if (editingProcedureId) {
-              await updateProcedure(editingProcedureId, data);
-            } else {
-              await addProcedure(data);
-            }
-            handleCloseForm();
-          }}
-        />
-      )}
-
-      {schedulingProcedure && (
-        <SchedulingModal
-          isDark={isDark}
-          procedure={schedulingProcedure}
-          onClose={() => setShowSchedulingModalId(null)}
-          onSchedule={async (id: string, date: string) => {
-            await updateProcedure(id, { scheduledDate: date, status: 'Programado' });
-            setShowSchedulingModalId(null);
-          }}
-          onToggleReq={toggleRequirement}
-          onAttach={async (procId: string, reqId: string, fileUrl: string) => {
-            const updatedReqs = schedulingProcedure.requirements.map(r =>
-              r.id === reqId ? { ...r, fileUrl, isCompleted: true } : r
+      {viewMode === 'list' && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          {userFilteredProcedures.map(proc => {
+            const rad = radiologists.find(e => e.id === proc.radiologistId);
+            return (
+              <div key={proc.id} className={`p-8 rounded-[40px] border transition-all group hover:border-blue-500 ${isDark ? 'bg-slate-900/30 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="flex justify-between items-start mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-blue-600/10 text-blue-600 flex items-center justify-center"><Stethoscope className="w-7 h-7" /></div>
+                    <div>
+                      <h4 className="text-xl font-black uppercase tracking-tight">{proc.procedureType || 'Sin Procedimiento'}</h4>
+                      <div className="flex items-center gap-3 mb-1">
+                        <p className="text-blue-600 font-black text-xs uppercase tracking-widest">{proc.patientName || 'Paciente S.N.'}</p>
+                        {proc.takesAnticoagulants && (
+                          <span className="px-3 py-1 bg-rose-500/10 text-rose-500 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                            <Info className="w-3 h-3" /> Anticoagulante
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] opacity-40 font-black uppercase tracking-widest">
+                        {proc.patientRut} {proc.patientInsurance ? `• ${proc.patientInsurance}` : ''}
+                      </p>
+                      <p className="text-[10px] opacity-40 font-black uppercase tracking-widest">
+                        {proc.clinicalCenter || 'Sede no asignada'} • {rad ? `Dr. ${rad.lastName}` : 'Sin Médico'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <StatusBadge status={proc.status} />
+                    <button
+                      onClick={() => handleEditClick(proc.id)}
+                      className="p-2.5 rounded-xl hover:bg-blue-600/10 text-blue-600 transition-all opacity-40 hover:opacity-100"
+                      title="Editar Procedimiento"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 mt-6">
+                  <button onClick={() => setShowSchedulingModalId(proc.id)} className="px-6 py-3 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest">Gestionar Cita</button>
+                </div>
+              </div>
             );
-            await updateProcedure(procId, { requirements: updatedReqs });
-          }}
-        />
+          })}
+        </div>
+      )}
+
+      {viewMode === 'calendar' && (
+        <EnhancedCalendar isDark={isDark} procedures={userFilteredProcedures} onEdit={(id: any) => setShowSchedulingModalId(id)} />
+      )}
+
+      {viewMode === 'stats' && (
+        <ProceduresStats isDark={isDark} filteredProcedures={statsFilteredProcedures} radiologists={radiologists} />
       )}
     </div>
+
+      {
+    showCatalogModal && (
+      <CatalogModal
+        isDark={isDark}
+        catalog={catalog}
+        onClose={() => setShowCatalogModal(false)}
+        onUpdate={updateCatalogItem}
+        onAdd={addCatalogItem}
+      />
+    )
+  }
+
+  {
+    showModal && (
+      <ProcedureForm
+        isDark={isDark}
+        radiologists={radiologists}
+        catalog={catalog}
+        initialData={editingProcedure || undefined}
+        onClose={handleCloseForm}
+        onSubmit={async (data: any) => {
+          if (editingProcedureId) {
+            await updateProcedure(editingProcedureId, data);
+          } else {
+            await addProcedure(data);
+          }
+          handleCloseForm();
+        }}
+      />
+    )
+  }
+
+  {
+    schedulingProcedure && (
+      <SchedulingModal
+        isDark={isDark}
+        procedure={schedulingProcedure}
+        onClose={() => setShowSchedulingModalId(null)}
+        onSchedule={async (id: string, date: string) => {
+          await updateProcedure(id, { scheduledDate: date, status: 'Programado' });
+          setShowSchedulingModalId(null);
+        }}
+        onToggleReq={toggleRequirement}
+        onAttach={async (procId: string, reqId: string, fileUrl: string) => {
+          const updatedReqs = schedulingProcedure.requirements.map(r =>
+            r.id === reqId ? { ...r, fileUrl, isCompleted: true } : r
+          );
+          await updateProcedure(procId, { requirements: updatedReqs });
+        }}
+      />
+    )
+  }
+    </div >
   );
 };
 
@@ -534,10 +550,14 @@ const EnhancedCalendar = ({ isDark, procedures, onEdit }: any) => {
 };
 
 const StatCard = ({ label, val, icon, isDark }: any) => (
-  <div className={`p-8 rounded-[40px] border transition-all hover:scale-105 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-    <div className="p-4 bg-slate-100 dark:bg-slate-800 rounded-2xl w-fit mb-6">{icon}</div>
-    <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">{label}</p>
-    <h3 className="text-3xl font-black tracking-tighter">{val}</h3>
+  <div className={`p-6 rounded-[32px] border transition-all hover:border-blue-500/30 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+    <div className="flex items-center gap-4">
+      <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl">{icon}</div>
+      <div>
+        <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-0.5 leading-none">{label}</p>
+        <h3 className="text-xl font-black tracking-tighter leading-none">{val}</h3>
+      </div>
+    </div>
   </div>
 );
 
