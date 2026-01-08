@@ -410,37 +410,125 @@ const StatsMiniCard = ({ label, val, icon, isDark }: any) => (
 
 const EnhancedCalendar = ({ isDark, procedures, onEdit }: any) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const daysInWeek = useMemo(() => {
-    const startOfWeek = new Date(currentDate);
-    startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
-    return Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date(startOfWeek);
-      d.setDate(startOfWeek.getDate() + i);
-      return d;
-    });
-  }, [currentDate]);
+  const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
+
+  const navigate = (direction: 'prev' | 'next') => {
+    const newDate = new Date(currentDate);
+    if (viewType === 'day') newDate.setDate(currentDate.getDate() + (direction === 'next' ? 1 : -1));
+    else if (viewType === 'week') newDate.setDate(currentDate.getDate() + (direction === 'next' ? 7 : -7));
+    else if (viewType === 'month') newDate.setMonth(currentDate.getMonth() + (direction === 'next' ? 1 : -1));
+    setCurrentDate(newDate);
+  };
+
+  const daysToRender = useMemo(() => {
+    if (viewType === 'day') return [currentDate];
+
+    if (viewType === 'week') {
+      const startOfWeek = new Date(currentDate);
+      startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+      return Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date(startOfWeek);
+        d.setDate(startOfWeek.getDate() + i);
+        return d;
+      });
+    }
+
+    if (viewType === 'month') {
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const startOfGrid = new Date(startOfMonth);
+      startOfGrid.setDate(startOfMonth.getDate() - startOfMonth.getDay());
+      return Array.from({ length: 35 }).map((_, i) => {
+        const d = new Date(startOfGrid);
+        d.setDate(startOfGrid.getDate() + i);
+        return d;
+      });
+    }
+    return [];
+  }, [currentDate, viewType]);
+
+  const viewLabel = useMemo(() => {
+    if (viewType === 'day') return currentDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+    if (viewType === 'week') {
+      const start = daysToRender[0];
+      const end = daysToRender[6];
+      return `${start.getDate()} - ${end.getDate()} ${end.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`;
+    }
+    return currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+  }, [currentDate, viewType, daysToRender]);
 
   return (
-    <div className="grid grid-cols-7 gap-6">
-      {daysInWeek.map((day, idx) => {
-        const dayProcs = procedures.filter((p: any) => p.scheduledDate && new Date(p.scheduledDate).toDateString() === day.toDateString());
-        return (
-          <div key={idx} className="space-y-6">
-            <div className="text-center">
-              <p className="text-[10px] font-black uppercase tracking-widest opacity-30">{day.toLocaleString('es-ES', { weekday: 'short' })}</p>
-              <p className="text-2xl font-black">{day.getDate()}</p>
-            </div>
-            <div className="min-h-[400px] flex flex-col gap-3 border-t border-slate-100 dark:border-slate-800 pt-6">
-              {dayProcs.map((p: any) => (
-                <div key={p.id} onClick={() => onEdit(p.id)} className={`p-4 rounded-2xl border text-[10px] font-black uppercase cursor-pointer hover:border-blue-500 transition-all shadow-sm ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
-                  <p className="truncate">{p.patientName || 'Paciente S.N.'}</p>
-                  <p className="text-[8px] opacity-40 mt-1">{p.procedureType || 'Sin procedimiento'}</p>
-                </div>
-              ))}
-            </div>
+    <div className="space-y-8 animate-in fade-in duration-500">
+      {/* Calendar Controls */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+            <button onClick={() => setViewType('day')} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewType === 'day' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Día</button>
+            <button onClick={() => setViewType('week')} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewType === 'week' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Semana</button>
+            <button onClick={() => setViewType('month')} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewType === 'month' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Mes</button>
           </div>
-        );
-      })}
+          <button onClick={() => setCurrentDate(new Date())} className="px-5 py-2.5 bg-blue-600/10 text-blue-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600/20 transition-all">Hoy</button>
+        </div>
+
+        <div className="flex items-center gap-6">
+          <h4 className="text-sm font-black uppercase tracking-widest opacity-60 min-w-[180px] text-center">{viewLabel}</h4>
+          <div className="flex gap-2">
+            <button onClick={() => navigate('prev')} className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><ChevronLeft className="w-4 h-4" /></button>
+            <button onClick={() => navigate('next')} className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><ChevronRight className="w-4 h-4" /></button>
+          </div>
+        </div>
+      </div>
+
+      {/* Grid Rendering */}
+      <div className={`grid gap-6 ${viewType === 'day' ? 'grid-cols-1' : 'grid-cols-7'}`}>
+        {daysToRender.map((day, idx) => {
+          const isToday = day.toDateString() === new Date().toDateString();
+          const isOtherMonth = day.getMonth() !== currentDate.getMonth() && viewType === 'month';
+          const dayProcs = procedures.filter((p: any) => p.scheduledDate && new Date(p.scheduledDate).toDateString() === day.toDateString());
+
+          return (
+            <div key={idx} className={`space-y-4 ${viewType === 'month' ? 'min-h-[140px]' : 'min-h-[400px]'} ${isOtherMonth ? 'opacity-20' : ''}`}>
+              {viewType !== 'month' && (
+                <div className={`p-4 rounded-3xl text-center transition-all ${isToday ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                  <p className={`text-[10px] font-black uppercase tracking-widest ${isToday ? 'opacity-70' : 'opacity-30'}`}>{day.toLocaleString('es-ES', { weekday: 'short' })}</p>
+                  <p className="text-2xl font-black leading-none mt-1">{day.getDate()}</p>
+                </div>
+              )}
+
+              {viewType === 'month' && (
+                <div className="flex justify-between items-center px-4">
+                  <span className={`text-[10px] font-black ${isToday ? 'text-blue-600' : 'opacity-30'}`}>{day.getDate()}</span>
+                  {dayProcs.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>}
+                </div>
+              )}
+
+              <div className={`flex flex-col gap-2 ${viewType !== 'month' ? 'pt-4 border-t border-slate-100 dark:border-slate-800' : ''}`}>
+                {dayProcs.length === 0 && viewType === 'day' && (
+                  <div className="py-20 text-center opacity-20 italic">
+                    <CalendarIcon className="w-12 h-12 mx-auto mb-4" />
+                    <p className="text-xs font-black uppercase tracking-widest">Sin procedimientos agendados</p>
+                  </div>
+                )}
+                {dayProcs.map((p: any) => (
+                  <div
+                    key={p.id}
+                    onClick={() => onEdit(p.id)}
+                    className={`p-4 rounded-2xl border text-[10px] font-black uppercase cursor-pointer transition-all hover:scale-[1.02] shadow-sm relative overflow-hidden group
+                      ${isDark ? 'bg-slate-900 border-slate-800 hover:border-blue-500' : 'bg-white border-slate-100 hover:border-blue-500'}`}
+                  >
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600"></div>
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-blue-600 group-hover:underline truncate">{p.patientName || 'Paciente S.N.'}</span>
+                      <span className="text-[8px] opacity-40 whitespace-nowrap">{p.scheduledDate?.split('T')[1]}</span>
+                    </div>
+                    <p className="text-[8px] opacity-40 truncate">{p.procedureType || 'Sin procedimiento'}</p>
+                    {p.takesAnticoagulants && <div className="mt-2 w-2 h-2 rounded-full bg-rose-500 ml-auto"></div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  ShieldCheck, 
-  Users, 
-  LayoutDashboard, 
-  Sun, 
-  Moon, 
-  Bell, 
+import {
+  ShieldCheck,
+  Users,
+  LayoutDashboard,
+  Sun,
+  Moon,
+  Bell,
   ChevronRight,
   LogOut,
   Search,
@@ -40,6 +40,7 @@ import SignatureModule from './modules/SignatureModule';
 import ManagementModule from './modules/ManagementModule';
 import ShiftsModule from './modules/ShiftsModule';
 import IndicatorsModule from './modules/IndicatorsModule';
+import DoctorAgendaPanel from './modules/DoctorAgendaPanel';
 import { ActiveModule, UserSession, UserRole } from './types';
 import { usePermissions } from './hooks/usePermissions';
 
@@ -57,7 +58,7 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [currentUser, setCurrentUser] = useState<UserSession>(SESSIONS['Superuser']);
   const { hasAccess, loading: permsLoading } = usePermissions();
-  
+
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('amis_theme');
     if (saved) return saved === 'dark';
@@ -126,23 +127,23 @@ const App: React.FC = () => {
 
   const handleRoleSwitch = (role: UserRole) => {
     setCurrentUser(SESSIONS[role]);
-    setActiveModule('dashboard'); 
+    setActiveModule('dashboard');
   };
 
   if (permsLoading) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950">
-       <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+      <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
     </div>
   );
 
   return (
     <div className={`flex min-h-screen transition-colors duration-300 ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
-      
+
       {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 transition-all duration-300 transform 
         ${isSidebarOpen ? 'w-64 translate-x-0' : 'w-20 translate-x-0'} 
         ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'} border-r`}>
-        
+
         <div className="flex flex-col h-full">
           <div className="p-6 flex items-center gap-3 overflow-hidden">
             <div className="bg-blue-600 p-2 rounded-xl flex-shrink-0">
@@ -164,8 +165,8 @@ const App: React.FC = () => {
                     key={item.id}
                     onClick={() => setActiveModule(item.id as ActiveModule)}
                     className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all group relative
-                      ${activeModule === item.id 
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' 
+                      ${activeModule === item.id
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
                         : 'hover:bg-slate-100 dark:hover:bg-slate-800 opacity-60 hover:opacity-100'}`}
                   >
                     <item.icon className="w-6 h-6 flex-shrink-0" />
@@ -185,7 +186,7 @@ const App: React.FC = () => {
           </nav>
 
           <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-            <button 
+            <button
               onClick={() => setIsDark(!isDark)}
               className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
             >
@@ -202,8 +203,8 @@ const App: React.FC = () => {
             </button>
           </div>
         </div>
-        
-        <button 
+
+        <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="absolute -right-3 top-10 bg-blue-600 text-white rounded-full p-1 shadow-lg border border-white dark:border-slate-900 z-[60]"
         >
@@ -220,12 +221,12 @@ const App: React.FC = () => {
               {getActiveLabel()}
             </h2>
           </div>
-          
+
           <div className="flex items-center gap-6">
             <div className={`hidden xl:flex items-center gap-3 p-1 rounded-2xl border ${isDark ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
               <span className="text-[8px] font-black uppercase opacity-40 px-3">Simular Perfil:</span>
               {(Object.keys(SESSIONS) as UserRole[]).map(role => (
-                <button 
+                <button
                   key={role}
                   onClick={() => handleRoleSwitch(role)}
                   className={`px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-tight transition-all
@@ -245,8 +246,8 @@ const App: React.FC = () => {
               <div className="text-right hidden sm:block">
                 <p className="text-[10px] font-black uppercase tracking-widest">{currentUser.name}</p>
                 <div className="flex items-center justify-end gap-1.5">
-                   <ShieldAlert className="w-2.5 h-2.5 text-blue-600" />
-                   <p className="text-[9px] font-black text-blue-600 uppercase tracking-tighter">{currentUser.role}</p>
+                  <ShieldAlert className="w-2.5 h-2.5 text-blue-600" />
+                  <p className="text-[9px] font-black text-blue-600 uppercase tracking-tighter">{currentUser.role}</p>
                 </div>
               </div>
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">
@@ -262,97 +263,102 @@ const App: React.FC = () => {
               <div className="mb-10">
                 <h1 className="text-5xl font-black tracking-tighter uppercase mb-3 leading-none">Comando Central AMIS</h1>
                 <div className="flex items-center gap-3">
-                   <p className="opacity-50 text-lg font-medium italic">Bienvenido, {currentUser.name}.</p>
-                   {currentUser.role !== 'Superuser' && (
-                     <span className="px-3 py-1 bg-blue-600/10 text-blue-600 text-[10px] font-black uppercase rounded-full tracking-widest border border-blue-500/20">Modo {currentUser.role}</span>
-                   )}
+                  <p className="opacity-50 text-lg font-medium italic">Bienvenido, {currentUser.name}.</p>
+                  {currentUser.role !== 'Superuser' && (
+                    <span className="px-3 py-1 bg-blue-600/10 text-blue-600 text-[10px] font-black uppercase rounded-full tracking-widest border border-blue-500/20">Modo {currentUser.role}</span>
+                  )}
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
                 {hasAccess(currentUser, 'indicators') && (
-                  <DashboardCard 
-                    onClick={() => setActiveModule('indicators')} 
-                    label="Estrategia" 
-                    val="Indicadores" 
-                    icon={<BarChart3 className="w-10 h-10" />} 
-                    color="bg-indigo-600" 
+                  <DashboardCard
+                    onClick={() => setActiveModule('indicators')}
+                    label="Estrategia"
+                    val="Indicadores"
+                    icon={<BarChart3 className="w-10 h-10" />}
+                    color="bg-indigo-600"
                   />
                 )}
                 {hasAccess(currentUser, 'institutions') && (
-                  <DashboardCard 
-                    onClick={() => setActiveModule('institutions')} 
-                    label="Clientes" 
-                    val="Sedes Clínicas" 
-                    icon={<Building2 className="w-10 h-10" />} 
-                    color="bg-slate-900" 
+                  <DashboardCard
+                    onClick={() => setActiveModule('institutions')}
+                    label="Clientes"
+                    val="Sedes Clínicas"
+                    icon={<Building2 className="w-10 h-10" />}
+                    color="bg-slate-900"
                   />
                 )}
                 {hasAccess(currentUser, 'shifts') && (
-                  <DashboardCard 
-                    onClick={() => setActiveModule('shifts')} 
-                    label="Turnos" 
-                    val="Planificación" 
-                    icon={<Clock className="w-10 h-10" />} 
-                    color="bg-indigo-700" 
+                  <DashboardCard
+                    onClick={() => setActiveModule('shifts')}
+                    label="Turnos"
+                    val="Planificación"
+                    icon={<Clock className="w-10 h-10" />}
+                    color="bg-indigo-700"
                   />
                 )}
                 {hasAccess(currentUser, 'agrawall') && (
-                  <DashboardCard 
-                    onClick={() => setActiveModule('agrawall')} 
-                    label="QA Radiología" 
-                    val="Auditoría IA" 
-                    icon={<ShieldCheck className="w-10 h-10" />} 
-                    color="bg-blue-700" 
+                  <DashboardCard
+                    onClick={() => setActiveModule('agrawall')}
+                    label="QA Radiología"
+                    val="Auditoría IA"
+                    icon={<ShieldCheck className="w-10 h-10" />}
+                    color="bg-blue-700"
                   />
                 )}
                 {hasAccess(currentUser, 'hr') && (
-                  <DashboardCard 
-                    onClick={() => setActiveModule('hr')} 
-                    label="Talento Humano" 
-                    val="Staff Activo" 
-                    icon={<Users className="w-10 h-10" />} 
-                    color="bg-emerald-600" 
+                  <DashboardCard
+                    onClick={() => setActiveModule('hr')}
+                    label="Talento Humano"
+                    val="Staff Activo"
+                    icon={<Users className="w-10 h-10" />}
+                    color="bg-emerald-600"
                   />
                 )}
                 {hasAccess(currentUser, 'documentation') && (
-                  <DashboardCard 
-                    onClick={() => setActiveModule('documentation')} 
-                    label="Documentación" 
-                    val="Control Docs" 
-                    icon={<FolderOpen className="w-10 h-10" />} 
-                    color="bg-amber-600" 
+                  <DashboardCard
+                    onClick={() => setActiveModule('documentation')}
+                    label="Documentación"
+                    val="Control Docs"
+                    icon={<FolderOpen className="w-10 h-10" />}
+                    color="bg-amber-600"
                   />
                 )}
               </div>
 
-              <div className="pt-6">
-                <DashboardNews isDark={isDark} onManage={hasAccess(currentUser, 'news') ? () => setActiveModule('news') : undefined} />
+              <div className="pt-6 grid grid-cols-1 xl:grid-cols-3 gap-8">
+                <div className="xl:col-span-2">
+                  <DashboardNews isDark={isDark} onManage={hasAccess(currentUser, 'news') ? () => setActiveModule('news') : undefined} />
+                </div>
+                <div>
+                  <DoctorAgendaPanel isDark={isDark} currentUser={currentUser} onViewAll={() => setActiveModule('procedures')} />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                 <div className={`p-10 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-                    <div className="flex items-center gap-4 mb-8">
-                       <div className="p-3 bg-blue-600 text-white rounded-2xl"><Activity className="w-6 h-6" /></div>
-                       <h4 className="text-xl font-black uppercase tracking-tighter">Métricas de Red</h4>
-                    </div>
-                    <div className="space-y-6">
-                       <MetricItem label="Precisión Diagnóstica" val="94.2%" color="emerald" />
-                       <MetricItem label="Cumplimiento SLA" val="88.7%" color="blue" />
-                       <MetricItem label="Retención Staff" val="96.0%" color="indigo" />
-                    </div>
-                 </div>
+                <div className={`p-10 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="p-3 bg-blue-600 text-white rounded-2xl"><Activity className="w-6 h-6" /></div>
+                    <h4 className="text-xl font-black uppercase tracking-tighter">Métricas de Red</h4>
+                  </div>
+                  <div className="space-y-6">
+                    <MetricItem label="Precisión Diagnóstica" val="94.2%" color="emerald" />
+                    <MetricItem label="Cumplimiento SLA" val="88.7%" color="blue" />
+                    <MetricItem label="Retención Staff" val="96.0%" color="indigo" />
+                  </div>
+                </div>
 
-                 <div className={`p-10 rounded-[48px] border lg:col-span-2 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-                    <div className="flex items-center gap-4 mb-8">
-                       <div className="p-3 bg-indigo-600 text-white rounded-2xl"><Award className="w-6 h-6" /></div>
-                       <h4 className="text-xl font-black uppercase tracking-tighter">Hitos y Reconocimientos</h4>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                       <HitoCard label="Certificación ISO 9001" sub="Completado en Diciembre 2024" icon={<ShieldCheck />} />
-                       <HitoCard label="Staff Top 10" sub="Reconocimiento Nacional QA" icon={<Award />} />
-                    </div>
-                 </div>
+                <div className={`p-10 rounded-[48px] border lg:col-span-2 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="p-3 bg-indigo-600 text-white rounded-2xl"><Award className="w-6 h-6" /></div>
+                    <h4 className="text-xl font-black uppercase tracking-tighter">Hitos y Reconocimientos</h4>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <HitoCard label="Certificación ISO 9001" sub="Completado en Diciembre 2024" icon={<ShieldCheck />} />
+                    <HitoCard label="Staff Top 10" sub="Reconocimiento Nacional QA" icon={<Award />} />
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -375,7 +381,7 @@ const App: React.FC = () => {
 };
 
 const DashboardCard = ({ onClick, label, val, icon, color }: any) => (
-  <div 
+  <div
     onClick={onClick}
     className={`p-8 rounded-[32px] ${color} text-white shadow-xl transition-transform hover:scale-105 cursor-pointer flex flex-col justify-between h-48 group`}
   >
@@ -395,7 +401,7 @@ const MetricItem = ({ label, val, color }: any) => (
       <span className="text-xs font-black">{val}</span>
     </div>
     <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-       <div className={`h-full bg-${color}-500 transition-all duration-1000`} style={{ width: val }} />
+      <div className={`h-full bg-${color}-500 transition-all duration-1000`} style={{ width: val }} />
     </div>
   </div>
 );
@@ -404,8 +410,8 @@ const HitoCard = ({ label, sub, icon }: any) => (
   <div className="p-6 rounded-[32px] bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center gap-5 transition-all hover:scale-[1.02]">
     <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl shadow-sm text-blue-600">{icon}</div>
     <div>
-       <h5 className="text-[12px] font-black uppercase tracking-tight">{label}</h5>
-       <p className="text-[9px] font-bold opacity-40 uppercase tracking-widest mt-1">{sub}</p>
+      <h5 className="text-[12px] font-black uppercase tracking-tight">{label}</h5>
+      <p className="text-[9px] font-bold opacity-40 uppercase tracking-widest mt-1">{sub}</p>
     </div>
   </div>
 );
