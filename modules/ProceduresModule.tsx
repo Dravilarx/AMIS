@@ -227,60 +227,59 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
       {viewMode === 'stats' && (
         <ProceduresStats isDark={isDark} filteredProcedures={statsFilteredProcedures} radiologists={radiologists} />
       )}
-    </div>
 
       {
-    showCatalogModal && (
-      <CatalogModal
-        isDark={isDark}
-        catalog={catalog}
-        onClose={() => setShowCatalogModal(false)}
-        onUpdate={updateCatalogItem}
-        onAdd={addCatalogItem}
-      />
-    )
-  }
+        showCatalogModal && (
+          <CatalogModal
+            isDark={isDark}
+            catalog={catalog}
+            onClose={() => setShowCatalogModal(false)}
+            onUpdate={updateCatalogItem}
+            onAdd={addCatalogItem}
+          />
+        )
+      }
 
-  {
-    showModal && (
-      <ProcedureForm
-        isDark={isDark}
-        radiologists={radiologists}
-        catalog={catalog}
-        initialData={editingProcedure || undefined}
-        onClose={handleCloseForm}
-        onSubmit={async (data: any) => {
-          if (editingProcedureId) {
-            await updateProcedure(editingProcedureId, data);
-          } else {
-            await addProcedure(data);
-          }
-          handleCloseForm();
-        }}
-      />
-    )
-  }
+      {
+        showModal && (
+          <ProcedureForm
+            isDark={isDark}
+            radiologists={radiologists}
+            catalog={catalog}
+            initialData={editingProcedure || undefined}
+            onClose={handleCloseForm}
+            onSubmit={async (data: any) => {
+              if (editingProcedureId) {
+                await updateProcedure(editingProcedureId, data);
+              } else {
+                await addProcedure(data);
+              }
+              handleCloseForm();
+            }}
+          />
+        )
+      }
 
-  {
-    schedulingProcedure && (
-      <SchedulingModal
-        isDark={isDark}
-        procedure={schedulingProcedure}
-        onClose={() => setShowSchedulingModalId(null)}
-        onSchedule={async (id: string, date: string) => {
-          await updateProcedure(id, { scheduledDate: date, status: 'Programado' });
-          setShowSchedulingModalId(null);
-        }}
-        onToggleReq={toggleRequirement}
-        onAttach={async (procId: string, reqId: string, fileUrl: string) => {
-          const updatedReqs = schedulingProcedure.requirements.map(r =>
-            r.id === reqId ? { ...r, fileUrl, isCompleted: true } : r
-          );
-          await updateProcedure(procId, { requirements: updatedReqs });
-        }}
-      />
-    )
-  }
+      {
+        schedulingProcedure && (
+          <SchedulingModal
+            isDark={isDark}
+            procedure={schedulingProcedure}
+            onClose={() => setShowSchedulingModalId(null)}
+            onSchedule={async (id: string, date: string) => {
+              await updateProcedure(id, { scheduledDate: date, status: 'Programado' });
+              setShowSchedulingModalId(null);
+            }}
+            onToggleReq={toggleRequirement}
+            onAttach={async (procId: string, reqId: string, fileUrl: string) => {
+              const updatedReqs = schedulingProcedure.requirements.map(r =>
+                r.id === reqId ? { ...r, fileUrl, isCompleted: true } : r
+              );
+              await updateProcedure(procId, { requirements: updatedReqs });
+            }}
+          />
+        )
+      }
     </div >
   );
 };
