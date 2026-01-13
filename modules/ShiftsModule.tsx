@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { GoogleGenAI, Chat, GenerateContentResponse } from "@google/genai";
 import {
@@ -13,9 +14,11 @@ import {
 import { useEmployees } from '../hooks/useEmployees';
 import { useInstitutions } from '../hooks/useInstitutions';
 import { UserSession } from '../types';
+import { addDocument, getDocuments, setDocument } from '../services/firestoreService';
 
 // Estructura de las Reglas de Oro con soporte para Grupos
 interface GoldenRules {
+  id?: string;
   businessStart: string;
   businessEnd: string;
   businessDays: number[];
@@ -48,13 +51,45 @@ const ShiftsModule: React.FC<Props> = ({ isDark, currentUser }) => {
   const doctors = useMemo(() => employees.filter(e => e.role === 'Médico'), [employees]);
 
   const [viewMode, setViewMode] = useState<'chat' | 'timeline' | 'config'>('timeline');
-  const [rules, setRules] = useState<GoldenRules>(() => {
-    const saved = localStorage.getItem('amis_golden_rules');
-    return saved ? JSON.parse(saved) : DEFAULT_RULES;
-  });
+  const [rules, setRules] = useState<GoldenRules>(DEFAULT_RULES);
+  const [loadingRules, setLoadingRules] = useState(true);
+
+  // Load rules from Firestore
+  useEffect(() => {
+    const loadRules = async () => {
+      try {
+        const data = await getDocuments<GoldenRules>('settings');
+        const shiftRules = data.find(s => s.id === 'golden_rules');
+        if (shiftRules) {
+          setRules(shiftRules);
+        } else {
+          // Seed initial rules
+          await setDocument('settings', 'golden_rules', { ...DEFAULT_RULES, id: 'golden_rules' });
+          setRules(DEFAULT_RULES);
+        }
+      } catch (err) {
+        console.error('Error loading golden rules:', err);
+      } finally {
+        setLoadingRules(false);
+      }
+    };
+    loadRules();
+  }, []);
+
+  const saveRules = async () => {
+    try {
+      await setDocument('settings', 'golden_rules', { ...rules, id: 'golden_rules' });
+      alert("Motor Reconfigurado Correctamente.");
+      setViewMode('chat');
+    } catch (err) {
+      console.error('Error saving golden rules:', err);
+      alert("Error al guardar las reglas.");
+    }
+  };
 
   // Estado para gestión de grupos
   const [newGroupName, setNewGroupName] = useState('');
+  // ... (rest of the component state)
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
 
   // Modal para gestionar restricciones de un médico específico
@@ -395,7 +430,7 @@ const ShiftsModule: React.FC<Props> = ({ isDark, currentUser }) => {
 
               <div className="pt-10 border-t border-slate-100 dark:border-slate-800">
                 <button
-                  onClick={() => { localStorage.setItem('amis_golden_rules', JSON.stringify(rules)); alert("Motor Reconfigurado Correctamente."); setViewMode('chat'); }}
+                  onClick={saveRules}
                   className="w-full py-6 bg-indigo-600 text-white rounded-[32px] font-black text-xs uppercase tracking-widest shadow-2xl shadow-indigo-500/30 hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-center gap-3"
                 >
                   <Save className="w-5 h-5" /> Guardar y Aplicar al Motor IA

@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { Institution, Contract } from '../types';
-import { db } from '../services/db';
+import { addDocument, getDocuments, updateDocument, deleteDocument } from '../services/firestoreService';
 
 const INITIAL_INSTITUTIONS: Institution[] = [
   {
@@ -67,76 +67,129 @@ export const useInstitutions = () => {
   const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const instCol = 'institutions';
   const contCol = 'contracts';
 
   useEffect(() => {
     const load = async () => {
-      let instData = await db.getAll<Institution>(instCol);
-      if (instData.length === 0) {
-        await db.saveAll(instCol, INITIAL_INSTITUTIONS);
-        instData = INITIAL_INSTITUTIONS;
-      }
-      setInstitutions(instData);
+      try {
+        setLoading(true);
 
-      let contData = await db.getAll<Contract>(contCol);
-      if (contData.length === 0) {
-        await db.saveAll(contCol, INITIAL_CONTRACTS);
-        contData = INITIAL_CONTRACTS;
+        let instData = await getDocuments<Institution>(instCol);
+        if (instData.length === 0) {
+          console.log('No institutions found, seeding...');
+          for (const inst of INITIAL_INSTITUTIONS) {
+            await addDocument(instCol, inst);
+          }
+          instData = await getDocuments<Institution>(instCol);
+        }
+        setInstitutions(instData);
+
+        let contData = await getDocuments<Contract>(contCol);
+        if (contData.length === 0) {
+          console.log('No contracts found, seeding...');
+          for (const cont of INITIAL_CONTRACTS) {
+            await addDocument(contCol, cont);
+          }
+          contData = await getDocuments<Contract>(contCol);
+        }
+        setContracts(contData);
+        setError(null);
+      } catch (err) {
+        console.error('Error loading institutions:', err);
+        setError('Failed to load institutional data');
+        // Fallback
+        setInstitutions(INITIAL_INSTITUTIONS);
+        setContracts(INITIAL_CONTRACTS);
+      } finally {
+        setLoading(false);
       }
-      setContracts(contData);
-      setLoading(false);
     };
     load();
   }, []);
 
   const addInstitution = async (inst: Omit<Institution, 'id'>) => {
-    const newItem = { ...inst, id: crypto.randomUUID() };
-    await db.add(instCol, newItem);
-    setInstitutions(prev => [...prev, newItem]);
-    return newItem;
+    try {
+      const id = await addDocument(instCol, inst);
+      const newItem = { ...inst, id };
+      setInstitutions(prev => [...prev, newItem]);
+      return newItem;
+    } catch (err) {
+      console.error('Error adding institution:', err);
+      throw err;
+    }
   };
 
   const addContract = async (cont: Omit<Contract, 'id' | 'documents'>) => {
-    const newItem = { ...cont, id: crypto.randomUUID(), documents: [] };
-    await db.add(contCol, newItem);
-    setContracts(prev => [...prev, newItem]);
-    return newItem;
+    try {
+      const data = { ...cont, documents: [] };
+      const id = await addDocument(contCol, data);
+      const newItem = { ...data, id } as Contract;
+      setContracts(prev => [...prev, newItem]);
+      return newItem;
+    } catch (err) {
+      console.error('Error adding contract:', err);
+      throw err;
+    }
   };
 
   const updateInstitution = async (id: string, updates: Partial<Institution>) => {
-    await db.update<Institution>(instCol, id, updates);
-    setInstitutions(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
+    try {
+      await updateDocument<Institution>(instCol, id, updates);
+      setInstitutions(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
+    } catch (err) {
+      console.error('Error updating institution:', err);
+      throw err;
+    }
   };
 
   const updateContract = async (id: string, updates: Partial<Contract>) => {
-    await db.update<Contract>(contCol, id, updates);
-    setContracts(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    try {
+      await updateDocument<Contract>(contCol, id, updates);
+      setContracts(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    } catch (err) {
+      console.error('Error updating contract:', err);
+      throw err;
+    }
   };
 
   const deleteInstitution = async (id: string) => {
-    await db.delete(instCol, id);
-    setInstitutions(prev => prev.filter(i => i.id !== id));
-    const associated = contracts.filter(c => c.institutionId === id);
-    for (const c of associated) {
-      await db.delete(contCol, c.id);
+    try {
+      await deleteDocument(instCol, id);
+      setInstitutions(prev => prev.filter(i => i.id !== id));
+
+      // Also delete associated contracts (optional but good for cleanup)
+      const associated = contracts.filter(c => c.institutionId === id);
+      for (const c of associated) {
+        await deleteDocument(contCol, c.id);
+      }
+      setContracts(prev => prev.filter(c => c.institutionId !== id));
+    } catch (err) {
+      console.error('Error deleting institution:', err);
+      throw err;
     }
-    setContracts(prev => prev.filter(c => c.institutionId !== id));
   };
 
   const deleteContract = async (id: string) => {
-    await db.delete(contCol, id);
-    setContracts(prev => prev.filter(c => c.id !== id));
+    try {
+      await deleteDocument(contCol, id);
+      setContracts(prev => prev.filter(c => c.id !== id));
+    } catch (err) {
+      console.error('Error deleting contract:', err);
+      throw err;
+    }
   };
 
-  return { 
-    institutions, 
-    contracts, 
-    loading, 
-    addInstitution, 
-    addContract, 
-    updateInstitution, 
+  return {
+    institutions,
+    contracts,
+    loading,
+    error,
+    addInstitution,
+    addContract,
+    updateInstitution,
     updateContract,
     deleteInstitution,
     deleteContract

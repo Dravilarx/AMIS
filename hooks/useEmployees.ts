@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { Employee } from '../types';
-import { db } from '../services/db';
+import { addDocument, getDocuments, updateDocument, deleteDocument } from '../services/firestoreService';
 
 const INITIAL_EMPLOYEES: Employee[] = [
   {
@@ -36,43 +36,71 @@ const INITIAL_EMPLOYEES: Employee[] = [
 export const useEmployees = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const collection = 'employees';
 
   useEffect(() => {
     const load = async () => {
-      let data = await db.getAll<Employee>(collection);
-      if (data.length === 0) {
-        await db.saveAll(collection, INITIAL_EMPLOYEES);
-        data = INITIAL_EMPLOYEES;
+      try {
+        setLoading(true);
+        let data = await getDocuments<Employee>(collection);
+        if (data.length === 0) {
+          console.log('No employees found, seeding...');
+          for (const emp of INITIAL_EMPLOYEES) {
+            await addDocument(collection, emp);
+          }
+          data = await getDocuments<Employee>(collection);
+        }
+        setEmployees(data);
+        setError(null);
+      } catch (err) {
+        console.error('Error loading employees:', err);
+        setError('Failed to load employee data');
+        setEmployees(INITIAL_EMPLOYEES);
+      } finally {
+        setLoading(false);
       }
-      setEmployees(data);
-      setLoading(false);
     };
     load();
   }, []);
 
   const addEmployee = async (employeeData: Omit<Employee, 'id' | 'performance' | 'status'>) => {
-    const newEmp: Employee = {
-      ...employeeData,
-      id: crypto.randomUUID(),
-      status: 'Activo',
-      performance: Math.floor(Math.random() * 15) + 85,
-    } as Employee;
+    try {
+      const newEmp = {
+        ...employeeData,
+        status: 'Activo' as const,
+        performance: Math.floor(Math.random() * 15) + 85,
+      };
 
-    await db.add(collection, newEmp);
-    setEmployees(prev => [newEmp, ...prev]);
-    return newEmp;
+      const id = await addDocument(collection, newEmp);
+      const entryWithId = { ...newEmp, id } as Employee;
+      setEmployees(prev => [entryWithId, ...prev]);
+      return entryWithId;
+    } catch (err) {
+      console.error('Error adding employee:', err);
+      throw err;
+    }
   };
 
   const deleteEmployee = async (id: string) => {
-    await db.delete(collection, id);
-    setEmployees(prev => prev.filter(e => e.id !== id));
+    try {
+      await deleteDocument(collection, id);
+      setEmployees(prev => prev.filter(e => e.id !== id));
+    } catch (err) {
+      console.error('Error deleting employee:', err);
+      throw err;
+    }
   };
 
   const updateEmployee = async (id: string, updates: Partial<Employee>) => {
-    await db.update(collection, id, updates);
-    setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+    try {
+      await updateDocument<Employee>(collection, id, updates);
+      setEmployees(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+    } catch (err) {
+      console.error('Error updating employee:', err);
+      throw err;
+    }
   };
 
-  return { employees, loading, addEmployee, deleteEmployee, updateEmployee };
+  return { employees, loading, error, addEmployee, deleteEmployee, updateEmployee };
 };

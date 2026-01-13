@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { Message } from '../types';
-import { db } from '../services/db';
+import { addDocument, getDocuments, updateDocument, deleteDocument } from '../services/firestoreService';
 
 const INITIAL_MESSAGES: Message[] = [
   {
@@ -33,51 +33,82 @@ const INITIAL_MESSAGES: Message[] = [
 export const useMessaging = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const collection = 'messages';
 
   useEffect(() => {
     const load = async () => {
-      let data = await db.getAll<Message>(collection);
-      if (data.length === 0) {
-        await db.saveAll(collection, INITIAL_MESSAGES);
-        data = INITIAL_MESSAGES;
+      try {
+        setLoading(true);
+        let data = await getDocuments<Message>(collection, 'timestamp');
+        if (data.length === 0) {
+          console.log('No messages found, seeding...');
+          for (const msg of INITIAL_MESSAGES) {
+            await addDocument(collection, msg);
+          }
+          data = await getDocuments<Message>(collection, 'timestamp');
+        }
+        setMessages(data);
+        setError(null);
+      } catch (err) {
+        console.error('Error loading messages:', err);
+        setError('Failed to load messaging data');
+        setMessages(INITIAL_MESSAGES);
+      } finally {
+        setLoading(false);
       }
-      setMessages(data);
-      setLoading(false);
     };
     load();
   }, []);
 
   const sendMessage = async (messageData: Omit<Message, 'id' | 'timestamp' | 'read' | 'folder'>) => {
-    const newMessage: Message = {
-      ...messageData,
-      id: crypto.randomUUID(),
-      timestamp: new Date().toISOString(),
-      read: false,
-      folder: 'sent'
-    };
-    
-    // In a real app, this would be distributed to each recipient's inbox.
-    // For this simulation, we save it once and the UI filters by user.
-    await db.add(collection, newMessage);
-    setMessages(prev => [newMessage, ...prev]);
-    return newMessage;
+    try {
+      const newMessage = {
+        ...messageData,
+        timestamp: new Date().toISOString(),
+        read: false,
+        folder: 'sent' as const
+      };
+
+      const id = await addDocument(collection, newMessage);
+      const entryWithId = { ...newMessage, id } as Message;
+      setMessages(prev => [entryWithId, ...prev]);
+      return entryWithId;
+    } catch (err) {
+      console.error('Error sending message:', err);
+      throw err;
+    }
   };
 
   const markAsRead = async (id: string) => {
-    await db.update<Message>(collection, id, { read: true });
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, read: true } : m));
+    try {
+      await updateDocument<Message>(collection, id, { read: true });
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, read: true } : m));
+    } catch (err) {
+      console.error('Error marking message as read:', err);
+      throw err;
+    }
   };
 
   const deleteMessage = async (id: string) => {
-    await db.update<Message>(collection, id, { folder: 'trash' });
-    setMessages(prev => prev.map(m => m.id === id ? { ...m, folder: 'trash' } : m));
+    try {
+      await updateDocument<Message>(collection, id, { folder: 'trash' });
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, folder: 'trash' } : m));
+    } catch (err) {
+      console.error('Error moving message to trash:', err);
+      throw err;
+    }
   };
 
   const permanentDelete = async (id: string) => {
-    await db.delete(collection, id);
-    setMessages(prev => prev.filter(m => m.id !== id));
+    try {
+      await deleteDocument(collection, id);
+      setMessages(prev => prev.filter(m => m.id !== id));
+    } catch (err) {
+      console.error('Error deleting message permanently:', err);
+      throw err;
+    }
   };
 
-  return { messages, loading, sendMessage, markAsRead, deleteMessage, permanentDelete };
+  return { messages, loading, error, sendMessage, markAsRead, deleteMessage, permanentDelete };
 };
