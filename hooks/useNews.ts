@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { NewsPost } from '../types';
-import { db } from '../services/db';
+import { addDocument, getDocuments, deleteDocument } from '../services/firestoreService';
 
 const INITIAL_NEWS: NewsPost[] = [
   {
@@ -38,36 +38,64 @@ const INITIAL_NEWS: NewsPost[] = [
 export const useNews = () => {
   const [news, setNews] = useState<NewsPost[]>([]);
   const [loading, setLoading] = useState(true);
-  const collection = 'news_posts';
+  const [error, setError] = useState<string | null>(null);
+  const collection = 'announcements';
 
   useEffect(() => {
     const load = async () => {
-      let data = await db.getAll<NewsPost>(collection);
-      if (data.length === 0) {
-        await db.saveAll(collection, INITIAL_NEWS);
-        data = INITIAL_NEWS;
+      try {
+        setLoading(true);
+        const data = await getDocuments<NewsPost>(collection, 'timestamp');
+
+        // If no data exists, seed with initial news
+        if (data.length === 0) {
+          console.log('No announcements found, seeding initial data...');
+          for (const post of INITIAL_NEWS) {
+            await addDocument(collection, post);
+          }
+          const seededData = await getDocuments<NewsPost>(collection, 'timestamp');
+          setNews(seededData);
+        } else {
+          setNews(data);
+        }
+        setError(null);
+      } catch (err) {
+        console.error('Error loading news:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load news');
+        // Fallback to initial data if Firestore fails
+        setNews(INITIAL_NEWS);
+      } finally {
+        setLoading(false);
       }
-      setNews(data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
-      setLoading(false);
     };
     load();
   }, []);
 
   const addPost = async (postData: Omit<NewsPost, 'id' | 'timestamp'>) => {
-    const newPost: NewsPost = {
-      ...postData,
-      id: crypto.randomUUID(),
-      timestamp: new Date().toISOString()
-    };
-    await db.add(collection, newPost);
-    setNews(prev => [newPost, ...prev]);
-    return newPost;
+    try {
+      const newPost = {
+        ...postData,
+        timestamp: new Date().toISOString()
+      };
+      const id = await addDocument<NewsPost>(collection, newPost);
+      const postWithId = { ...newPost, id };
+      setNews(prev => [postWithId, ...prev]);
+      return postWithId;
+    } catch (err) {
+      console.error('Error adding post:', err);
+      throw err;
+    }
   };
 
   const deletePost = async (id: string) => {
-    await db.delete(collection, id);
-    setNews(prev => prev.filter(p => p.id !== id));
+    try {
+      await deleteDocument(collection, id);
+      setNews(prev => prev.filter(p => p.id !== id));
+    } catch (err) {
+      console.error('Error deleting post:', err);
+      throw err;
+    }
   };
 
-  return { news, loading, addPost, deletePost };
+  return { news, loading, error, addPost, deletePost };
 };

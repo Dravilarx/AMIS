@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import { ProcedureEntry, ProcedureStatus, ProcedureRequirement, ProcedureCatalogItem } from '../types';
-import { db } from '../services/db';
+import { addDocument, getDocuments, updateDocument, deleteDocument } from '../services/firestoreService';
 
 const INITIAL_CATALOG: ProcedureCatalogItem[] = [
   {
@@ -102,54 +102,91 @@ export const useProcedures = () => {
   const [procedures, setProcedures] = useState<ProcedureEntry[]>([]);
   const [catalog, setCatalog] = useState<ProcedureCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const proceduresCol = 'procedures';
   const catalogCol = 'procedure_catalog';
 
   useEffect(() => {
     const load = async () => {
-      let catData = await db.getAll<ProcedureCatalogItem>(catalogCol);
-      if (catData.length === 0) {
-        await db.saveAll(catalogCol, INITIAL_CATALOG);
-        catData = INITIAL_CATALOG;
-      }
-      setCatalog(catData);
+      try {
+        setLoading(true);
 
-      let procData = await db.getAll<ProcedureEntry>(proceduresCol);
-      if (procData.length === 0) {
-        await db.saveAll(proceduresCol, INITIAL_PROCEDURES);
-        procData = INITIAL_PROCEDURES;
+        // Load catalog
+        const catData = await getDocuments<ProcedureCatalogItem>(catalogCol);
+        if (catData.length === 0) {
+          console.log('No catalog found, seeding initial data...');
+          for (const item of INITIAL_CATALOG) {
+            await addDocument(catalogCol, item);
+          }
+          const seededCatalog = await getDocuments<ProcedureCatalogItem>(catalogCol);
+          setCatalog(seededCatalog);
+        } else {
+          setCatalog(catData);
+        }
+
+        // Load procedures
+        const procData = await getDocuments<ProcedureEntry>(proceduresCol, 'createdAt');
+        if (procData.length === 0) {
+          console.log('No procedures found, seeding initial data...');
+          for (const proc of INITIAL_PROCEDURES) {
+            await addDocument(proceduresCol, proc);
+          }
+          const seededProcs = await getDocuments<ProcedureEntry>(proceduresCol, 'createdAt');
+          setProcedures(seededProcs);
+        } else {
+          setProcedures(procData);
+        }
+
+        setError(null);
+      } catch (err) {
+        console.error('Error loading procedures:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load procedures');
+        // Fallback to initial data
+        setCatalog(INITIAL_CATALOG);
+        setProcedures(INITIAL_PROCEDURES);
+      } finally {
+        setLoading(false);
       }
-      setProcedures(procData);
-      setLoading(false);
     };
     load();
   }, []);
 
   const addProcedure = async (data: Omit<ProcedureEntry, 'id' | 'createdAt' | 'status' | 'requirements'>) => {
-    // Buscar los requerimientos definidos en el catálogo para este tipo de procedimiento
-    const catalogItem = catalog.find(item => item.name === data.procedureType);
-    const templateDocs = catalogItem?.requiredDocs || ['Consentimiento Informado', 'Orden Médica'];
+    try {
+      // Buscar los requerimientos definidos en el catálogo para este tipo de procedimiento
+      const catalogItem = catalog.find(item => item.name === data.procedureType);
+      const templateDocs = catalogItem?.requiredDocs || ['Consentimiento Informado', 'Orden Médica'];
 
-    const newEntry: ProcedureEntry = {
-      ...data,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-      status: 'Pendiente Docs',
-      requirements: templateDocs.map((name, idx) => ({
-        id: `r-${idx}-${Date.now()}`,
-        name,
-        isCompleted: false
-      }))
-    };
-    await db.add(proceduresCol, newEntry);
-    setProcedures(prev => [newEntry, ...prev]);
-    return newEntry;
+      const newEntry = {
+        ...data,
+        createdAt: new Date().toISOString(),
+        status: 'Pendiente Docs' as ProcedureStatus,
+        requirements: templateDocs.map((name, idx) => ({
+          id: `r-${idx}-${Date.now()}`,
+          name,
+          isCompleted: false
+        }))
+      };
+
+      const id = await addDocument<ProcedureEntry>(proceduresCol, newEntry);
+      const entryWithId = { ...newEntry, id };
+      setProcedures(prev => [entryWithId, ...prev]);
+      return entryWithId;
+    } catch (err) {
+      console.error('Error adding procedure:', err);
+      throw err;
+    }
   };
 
   const updateProcedure = async (id: string, updates: Partial<ProcedureEntry>) => {
-    await db.update(proceduresCol, id, updates);
-    setProcedures(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    try {
+      await updateDocument<ProcedureEntry>(proceduresCol, id, updates);
+      setProcedures(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    } catch (err) {
+      console.error('Error updating procedure:', err);
+      throw err;
+    }
   };
 
   const toggleRequirement = async (procId: string, reqId: string) => {
@@ -172,25 +209,41 @@ export const useProcedures = () => {
   };
 
   const deleteProcedure = async (id: string) => {
-    await db.delete(proceduresCol, id);
-    setProcedures(prev => prev.filter(p => p.id !== id));
+    try {
+      await deleteDocument(proceduresCol, id);
+      setProcedures(prev => prev.filter(p => p.id !== id));
+    } catch (err) {
+      console.error('Error deleting procedure:', err);
+      throw err;
+    }
   };
 
   const updateCatalogItem = async (id: string, updates: Partial<ProcedureCatalogItem>) => {
-    await db.update(catalogCol, id, updates);
-    setCatalog(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    try {
+      await updateDocument<ProcedureCatalogItem>(catalogCol, id, updates);
+      setCatalog(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    } catch (err) {
+      console.error('Error updating catalog item:', err);
+      throw err;
+    }
   };
 
   const addCatalogItem = async (item: Omit<ProcedureCatalogItem, 'id'>) => {
-    const newItem = { ...item, id: crypto.randomUUID() };
-    await db.add(catalogCol, newItem);
-    setCatalog(prev => [...prev, newItem]);
+    try {
+      const id = await addDocument<ProcedureCatalogItem>(catalogCol, item);
+      const newItem = { ...item, id };
+      setCatalog(prev => [...prev, newItem]);
+    } catch (err) {
+      console.error('Error adding catalog item:', err);
+      throw err;
+    }
   };
 
   return {
     procedures,
     catalog,
     loading,
+    error,
     addProcedure,
     updateProcedure,
     toggleRequirement,
