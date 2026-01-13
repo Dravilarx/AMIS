@@ -1,544 +1,659 @@
-
-import { Activity, ArrowRight, BarChart3, Building2, Calendar as CalendarIcon, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Clock, DollarSign, Edit2, FileText, Filter, Hash, Info, LayoutList, Mail, MessageCircle, MoreVertical, Phone, Plus, Save, Search, Settings, Share2, ShieldCheck, Stethoscope, Tag, Target, Trash2, User, UserCircle2, Wallet, X, Paperclip, UploadCloud, TrendingUp, PieChart, Users } from 'lucide-react';
-import React, { useEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
+import {
+  AlertTriangle, ArrowDown, ArrowUp, Calendar, ChevronDown, ChevronLeft, ChevronRight,
+  Download, Edit2, Eye, FileText, Filter, Info, Mail, Phone, Plus,
+  Printer, Search, Trash2, Upload, User, X, Check, Clock, Building2,
+  AlertCircle, FileSpreadsheet, Save, Stethoscope, MapPin, Activity,
+  BarChart3, Users, DollarSign, TrendingUp, Bell, FileUp, CheckCircle2
+} from 'lucide-react';
+import React, { useMemo, useState, useRef } from 'react';
 import { useEmployees } from '../hooks/useEmployees';
 import { useProcedures } from '../hooks/useProcedures';
-import { ProcedureCatalogItem, ProcedureModality, ProcedureStatus, UserSession, ProcedureEntry } from '../types';
+import { ProcedureStatus, UserSession, ProcedureEntry, Employee } from '../types';
 
 interface Props {
   isDark: boolean;
   currentUser: UserSession;
 }
 
-type TimeFilter = 'month' | 'six_months' | 'year' | 'all';
+type SortField = 'patientName' | 'patientRut' | 'procedureType' | 'scheduledDate' | 'status' | 'clinicalCenter';
+type SortDirection = 'asc' | 'desc';
+type ViewMode = 'table' | 'calendar' | 'stats';
 
 const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
   const { employees } = useEmployees();
-  const {
-    procedures,
-    catalog,
-    addProcedure,
-    updateProcedure,
-    toggleRequirement,
-    deleteProcedure,
-    updateCatalogItem,
-    addCatalogItem
-  } = useProcedures();
+  const { procedures, catalog, addProcedure, updateProcedure, deleteProcedure, toggleRequirement } = useProcedures();
 
-  const [showModal, setShowModal] = useState(false);
-  const [editingProcedureId, setEditingProcedureId] = useState<string | null>(null);
-  const [showCatalogModal, setShowCatalogModal] = useState(false);
-  const [showSchedulingModalId, setShowSchedulingModalId] = useState<string | null>(null);
+  // State
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProcedureStatus | 'All'>('All');
   const [doctorFilter, setDoctorFilter] = useState<string>('All');
-  const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'stats'>('calendar');
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [centerFilter, setCenterFilter] = useState<string>('All');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [sortField, setSortField] = useState<SortField>('scheduledDate');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedProcedure, setSelectedProcedure] = useState<ProcedureEntry | null>(null);
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [editingProcedure, setEditingProcedure] = useState<ProcedureEntry | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
+  const [showBatchActions, setShowBatchActions] = useState(false);
+  const [batchStatus, setBatchStatus] = useState<ProcedureStatus | ''>('');
 
   const radiologists = useMemo(() => employees.filter(e => e.role === 'Médico'), [employees]);
+  const centers = useMemo(() => [...new Set(procedures.map(p => p.clinicalCenter).filter(Boolean))], [procedures]);
 
-  // Per-user filtering
-  const userFilteredProcedures = useMemo(() => {
-    let base = procedures;
+  // Notifications - procedures needing attention
+  const notifications = useMemo(() => {
+    const now = new Date();
+    const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+    return {
+      pendingDocs: procedures.filter(p => p.status === 'Pendiente Docs').length,
+      upcoming24h: procedures.filter(p => {
+        if (!p.scheduledDate) return false;
+        const d = new Date(p.scheduledDate);
+        return d >= now && d <= in24h;
+      }).length,
+      upcoming48h: procedures.filter(p => {
+        if (!p.scheduledDate) return false;
+        const d = new Date(p.scheduledDate);
+        return d > in24h && d <= in48h;
+      }).length
+    };
+  }, [procedures]);
+
+  const totalNotifications = notifications.pendingDocs + notifications.upcoming24h;
+
+  // Filtering & Sorting
+  const filteredProcedures = useMemo(() => {
+    let filtered = procedures;
+
     if (currentUser.role === 'Médico' || currentUser.role === 'Técnico') {
-      base = procedures.filter(p => p.radiologistId === currentUser.id);
+      filtered = filtered.filter(p => p.radiologistId === currentUser.id);
     }
 
-    return base.filter(p => {
-      const matchSearch = p.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.patientRut.includes(searchTerm);
-      const matchStatus = statusFilter === 'All' || p.status === statusFilter;
-      const matchDoctor = doctorFilter === 'All' || p.radiologistId === doctorFilter;
-      return matchSearch && matchStatus && matchDoctor;
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(p =>
+        p.patientName.toLowerCase().includes(term) ||
+        p.patientRut.includes(term) ||
+        p.procedureType.toLowerCase().includes(term)
+      );
+    }
+
+    if (statusFilter !== 'All') filtered = filtered.filter(p => p.status === statusFilter);
+    if (doctorFilter !== 'All') filtered = filtered.filter(p => p.radiologistId === doctorFilter);
+    if (centerFilter !== 'All') filtered = filtered.filter(p => p.clinicalCenter === centerFilter);
+    if (dateFrom) filtered = filtered.filter(p => p.scheduledDate && p.scheduledDate >= dateFrom);
+    if (dateTo) filtered = filtered.filter(p => p.scheduledDate && p.scheduledDate <= dateTo);
+
+    filtered.sort((a, b) => {
+      let aVal: any = a[sortField] || '';
+      let bVal: any = b[sortField] || '';
+      if (sortField === 'scheduledDate') {
+        aVal = a.scheduledDate || '9999-12-31';
+        bVal = b.scheduledDate || '9999-12-31';
+      }
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
     });
-  }, [procedures, searchTerm, statusFilter, doctorFilter, currentUser]);
 
-  // Time-filtered procedures for Stats
-  const statsFilteredProcedures = useMemo(() => {
-    const now = new Date();
-    return userFilteredProcedures.filter(p => {
-      const procDate = new Date(p.createdAt);
-      if (timeFilter === 'month') {
-        const monthAgo = new Date();
-        monthAgo.setMonth(now.getMonth() - 1);
-        return procDate >= monthAgo;
-      }
-      if (timeFilter === 'six_months') {
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(now.getMonth() - 6);
-        return procDate >= sixMonthsAgo;
-      }
-      if (timeFilter === 'year') {
-        const yearAgo = new Date();
-        yearAgo.setFullYear(now.getFullYear() - 1);
-        return procDate >= yearAgo;
-      }
-      return true;
+    return filtered;
+  }, [procedures, searchTerm, statusFilter, doctorFilter, centerFilter, dateFrom, dateTo, sortField, sortDirection, currentUser]);
+
+  // Stats
+  const stats = useMemo(() => {
+    const total = filteredProcedures.length;
+    const completed = filteredProcedures.filter(p => p.status === 'Completado').length;
+    const pending = filteredProcedures.filter(p => p.status === 'Pendiente Docs').length;
+    const scheduled = filteredProcedures.filter(p => p.status === 'Programado').length;
+    const totalValue = filteredProcedures.reduce((acc, p) => acc + p.value, 0);
+    const completedValue = filteredProcedures.filter(p => p.status === 'Completado').reduce((acc, p) => acc + p.value, 0);
+
+    const byStatus: Record<string, number> = {};
+    const byDoctor: Record<string, { count: number; value: number }> = {};
+    const byCenter: Record<string, number> = {};
+
+    filteredProcedures.forEach(p => {
+      byStatus[p.status] = (byStatus[p.status] || 0) + 1;
+
+      const doc = radiologists.find(r => r.id === p.radiologistId);
+      const docName = doc ? `Dr. ${doc.lastName}` : 'Sin asignar';
+      if (!byDoctor[docName]) byDoctor[docName] = { count: 0, value: 0 };
+      byDoctor[docName].count++;
+      byDoctor[docName].value += p.value;
+
+      const center = p.clinicalCenter || 'Sin sede';
+      byCenter[center] = (byCenter[center] || 0) + 1;
     });
-  }, [userFilteredProcedures, timeFilter]);
 
-  const revenue = userFilteredProcedures.reduce((acc, p) => p.status === 'Completado' ? acc + p.value : acc, 0);
-  const pendingDocs = userFilteredProcedures.filter(p => p.status === 'Pendiente Docs').length;
-  const readyToSchedule = userFilteredProcedures.filter(p => p.status === 'Listo').length;
+    return { total, completed, pending, scheduled, totalValue, completedValue, byStatus, byDoctor, byCenter };
+  }, [filteredProcedures, radiologists]);
 
-  const editingProcedure = useMemo(() =>
-    editingProcedureId ? procedures.find(p => p.id === editingProcedureId) : null
-    , [editingProcedureId, procedures]);
+  // Pagination
+  const totalPages = Math.ceil(filteredProcedures.length / itemsPerPage);
+  const paginatedProcedures = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredProcedures.slice(start, start + itemsPerPage);
+  }, [filteredProcedures, currentPage, itemsPerPage]);
 
-  const schedulingProcedure = useMemo(() =>
-    showSchedulingModalId ? procedures.find(p => p.id === showSchedulingModalId) : null
-    , [showSchedulingModalId, procedures]);
-
-  const handleEditClick = (id: string) => {
-    setEditingProcedureId(id);
-    setShowModal(true);
+  // Handlers
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
   };
 
-  const handleCloseForm = () => {
-    setShowModal(false);
-    setEditingProcedureId(null);
+  const handleSelectAll = () => {
+    if (selectedIds.size === paginatedProcedures.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(paginatedProcedures.map(p => p.id)));
+    }
+  };
+
+  const handleSelectOne = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedIds(newSet);
+  };
+
+  const handleBatchStatusChange = async () => {
+    if (!batchStatus) return;
+    for (const id of selectedIds) {
+      await updateProcedure(id, { status: batchStatus as ProcedureStatus });
+    }
+    setSelectedIds(new Set());
+    setBatchStatus('');
+  };
+
+  const handleBatchDelete = async () => {
+    if (!confirm(`¿Eliminar ${selectedIds.size} procedimientos?`)) return;
+    for (const id of selectedIds) {
+      await deleteProcedure(id);
+    }
+    setSelectedIds(new Set());
+  };
+
+  const exportToCSV = () => {
+    const headers = ['RUT', 'Paciente', 'Procedimiento', 'Fecha', 'Médico', 'Sede', 'Estado', 'Valor'];
+    const rows = filteredProcedures.map(p => {
+      const doctor = radiologists.find(r => r.id === p.radiologistId);
+      return [
+        p.patientRut,
+        p.patientName,
+        p.procedureType,
+        p.scheduledDate || 'Sin programar',
+        doctor ? `Dr. ${doctor.lastName}` : 'Sin asignar',
+        p.clinicalCenter || 'Sin sede',
+        p.status,
+        p.value
+      ];
+    });
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `procedimientos_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  const exportToPDF = () => {
+    window.print();
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('All');
+    setDoctorFilter('All');
+    setCenterFilter('All');
+    setDateFrom('');
+    setDateTo('');
+  };
+
+  const activeFiltersCount = [searchTerm, statusFilter !== 'All', doctorFilter !== 'All', centerFilter !== 'All', dateFrom, dateTo].filter(Boolean).length;
+
+  const getDocCompletionPercent = (proc: ProcedureEntry) => {
+    if (!proc.requirements || proc.requirements.length === 0) return 100;
+    const completed = proc.requirements.filter(r => r.isCompleted).length;
+    return Math.round((completed / proc.requirements.length) * 100);
   };
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-700">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
-        <div>
-          <h2 className="text-5xl font-black uppercase tracking-tighter leading-none mb-2">Intervencionismo Staff</h2>
-          <p className="opacity-40 text-lg font-medium italic">Gestión de procedimientos para: {currentUser.name}.</p>
+    <div className="space-y-6 print:space-y-2">
+      {/* Notifications Alert */}
+      {totalNotifications > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex items-center justify-between print:hidden">
+          <div className="flex items-center gap-3">
+            <Bell className="w-5 h-5 text-amber-600" />
+            <div>
+              <p className="font-medium text-amber-800 dark:text-amber-200">Atención requerida</p>
+              <p className="text-sm text-amber-600 dark:text-amber-300">
+                {notifications.pendingDocs > 0 && `${notifications.pendingDocs} pendientes de documentación`}
+                {notifications.pendingDocs > 0 && notifications.upcoming24h > 0 && ' • '}
+                {notifications.upcoming24h > 0 && `${notifications.upcoming24h} procedimientos en las próximas 24h`}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setStatusFilter('Pendiente Docs')}
+            className="px-3 py-1 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700"
+          >
+            Ver pendientes
+          </button>
         </div>
+      )}
 
-        <div className="flex flex-wrap items-center gap-4">
-          {/* Selector de Vista - Integrado en Cabecera */}
-          <div className="flex gap-1 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-            <button onClick={() => setViewMode('list')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Listado</button>
-            <button onClick={() => setViewMode('calendar')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'calendar' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Agenda</button>
-            {(currentUser.role === 'Superuser' || currentUser.role === 'Jefatura') && (
-              <button onClick={() => setViewMode('stats')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'stats' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Análisis</button>
-            )}
+      {/* Header */}
+      <div className="flex items-center justify-between print:hidden">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+            INTERVENCIONISMO - Gestión de Procedimientos
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">
+            {filteredProcedures.length} de {procedures.length} procedimientos
+          </p>
+        </div>
+        <div className="flex gap-3">
+          {/* View Toggle */}
+          <div className="flex border border-slate-300 dark:border-slate-600 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-2 text-sm font-medium ${viewMode === 'table' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+            >
+              Tabla
+            </button>
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`px-3 py-2 text-sm font-medium border-x border-slate-300 dark:border-slate-600 ${viewMode === 'calendar' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+            >
+              Calendario
+            </button>
+            <button
+              onClick={() => setViewMode('stats')}
+              className={`px-3 py-2 text-sm font-medium ${viewMode === 'stats' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+            >
+              Estadísticas
+            </button>
           </div>
 
-          <div className="h-10 w-[1px] bg-slate-200 dark:bg-slate-800 mx-2 hidden lg:block" />
-
-          {(currentUser.role === 'Superuser' || currentUser.role === 'Administrativo') && (
-            <button
-              onClick={() => setShowCatalogModal(true)}
-              className={`p-4 border rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all hover:bg-slate-100 dark:hover:bg-slate-800 ${isDark ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500 shadow-sm'}`}
-            >
-              <Settings className="w-4 h-4" /> Catálogo
-            </button>
-          )}
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-6 py-4 bg-blue-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:scale-105 transition-all shadow-xl shadow-blue-500/20"
-          >
-            <Plus className="w-5 h-5" /> Nuevo Caso
+          <button onClick={exportToCSV} className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 text-sm font-medium">
+            <Download className="w-4 h-4" /> CSV
+          </button>
+          <button onClick={exportToPDF} className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 text-sm font-medium">
+            <Printer className="w-4 h-4" /> Imprimir
+          </button>
+          <button onClick={() => setShowNewModal(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm font-medium">
+            <Plus className="w-4 h-4" /> Nuevo Paciente
           </button>
         </div>
       </div>
 
-      {/* Stats Cards - Smaller & Minimalist */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Mi Facturación" val={`$${revenue.toLocaleString()}`} icon={<Wallet className="w-5 h-5 text-emerald-500" />} isDark={isDark} />
-        <StatCard label="Casos Pendientes" val={pendingDocs} icon={<FileText className="w-5 h-5 text-amber-500" />} isDark={isDark} />
-        <StatCard label="Por Agendar" val={readyToSchedule} icon={<CheckCircle2 className="w-5 h-5 text-blue-500" />} isDark={isDark} />
-        <StatCard label="Total Histórico" val={userFilteredProcedures.length} icon={<Activity className="w-5 h-5 text-indigo-500" />} isDark={isDark} />
+      {/* Print Header */}
+      <div className="hidden print:block mb-4">
+        <h1 className="text-xl font-bold">Reporte de Procedimientos - AMIS</h1>
+        <p className="text-sm text-slate-600">Fecha: {new Date().toLocaleDateString('es-CL')}</p>
       </div>
 
-      {/* Control Bar */}
-      <div className={`p-10 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-        <div className="flex flex-col xl:flex-row items-center justify-between gap-8 mb-10">
+      {/* Search & Filters */}
+      {viewMode !== 'stats' && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 print:hidden">
+          <div className="flex gap-3 items-center">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar por RUT, nombre o procedimiento..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`px-4 py-2 border rounded-lg flex items-center gap-2 text-sm font-medium ${showFilters ? 'bg-blue-50 border-blue-300 text-blue-700' : 'border-slate-300 dark:border-slate-600'}`}
+            >
+              <Filter className="w-4 h-4" /> Filtros
+              {activeFiltersCount > 0 && (
+                <span className="bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">{activeFiltersCount}</span>
+              )}
+            </button>
+          </div>
+
+          {showFilters && (
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm">
+                <option value="All">Todos los estados</option>
+                <option value="Pendiente Docs">Pendiente Docs</option>
+                <option value="Listo">Listo</option>
+                <option value="Programado">Programado</option>
+                <option value="Completado">Completado</option>
+                <option value="Cancelado">Cancelado</option>
+              </select>
+              <select value={doctorFilter} onChange={(e) => setDoctorFilter(e.target.value)} className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm">
+                <option value="All">Todos los médicos</option>
+                {radiologists.map(r => <option key={r.id} value={r.id}>Dr. {r.lastName}</option>)}
+              </select>
+              <select value={centerFilter} onChange={(e) => setCenterFilter(e.target.value)} className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm">
+                <option value="All">Todas las sedes</option>
+                {centers.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm" />
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-sm" />
+              {activeFiltersCount > 0 && (
+                <button onClick={clearFilters} className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg flex items-center gap-2">
+                  <X className="w-4 h-4" /> Limpiar
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Batch Actions Bar */}
+      {selectedIds.size > 0 && viewMode === 'table' && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex items-center justify-between print:hidden">
+          <span className="font-medium text-blue-800 dark:text-blue-200">{selectedIds.size} seleccionados</span>
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-600/10 text-blue-600 rounded-2xl"><CalendarDays className="w-6 h-6" /></div>
-            <h4 className="text-xl font-black uppercase tracking-tight">Gestión Operativa</h4>
+            <select
+              value={batchStatus}
+              onChange={(e) => setBatchStatus(e.target.value as ProcedureStatus)}
+              className="px-3 py-2 border border-blue-300 rounded-lg text-sm bg-white"
+            >
+              <option value="">Cambiar estado a...</option>
+              <option value="Pendiente Docs">Pendiente Docs</option>
+              <option value="Listo">Listo</option>
+              <option value="Programado">Programado</option>
+              <option value="Completado">Completado</option>
+              <option value="Cancelado">Cancelado</option>
+            </select>
+            <button
+              onClick={handleBatchStatusChange}
+              disabled={!batchStatus}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-blue-700"
+            >
+              Aplicar
+            </button>
+            <button
+              onClick={handleBatchDelete}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" /> Eliminar
+            </button>
+            <button onClick={() => setSelectedIds(new Set())} className="p-2 hover:bg-blue-100 rounded-lg">
+              <X className="w-4 h-4 text-blue-600" />
+            </button>
           </div>
-
-          <div className="flex flex-wrap items-center gap-6">
-            {viewMode === 'stats' && (
-              <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl animate-in fade-in zoom-in duration-300">
-                <button onClick={() => setTimeFilter('month')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${timeFilter === 'month' ? 'bg-indigo-600 text-white shadow-sm' : 'opacity-40'}`}>Este Mes</button>
-                <button onClick={() => setTimeFilter('six_months')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${timeFilter === 'six_months' ? 'bg-indigo-600 text-white shadow-sm' : 'opacity-40'}`}>6 Meses</button>
-                <button onClick={() => setTimeFilter('year')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${timeFilter === 'year' ? 'bg-indigo-600 text-white shadow-sm' : 'opacity-40'}`}>Año</button>
-                <button onClick={() => setTimeFilter('all')} className={`px-4 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${timeFilter === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'opacity-40'}`}>Todo</button>
-              </div>
-            )}
-
-            {viewMode !== 'stats' && (
-              <div className="relative w-full max-w-sm">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30" />
-                <input type="text" placeholder="Buscar paciente..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className={`w-full pl-12 pr-4 py-3.5 rounded-2xl outline-none border transition-all text-xs font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-500' : 'bg-slate-50 border-slate-100 focus:bg-white focus:border-blue-500 shadow-sm'}`} />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {viewMode === 'list' && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          {userFilteredProcedures.map(proc => {
-            const rad = radiologists.find(e => e.id === proc.radiologistId);
-            return (
-              <div key={proc.id} className={`p-8 rounded-[40px] border transition-all group hover:border-blue-500 ${isDark ? 'bg-slate-900/30 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                <div className="flex justify-between items-start mb-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-blue-600/10 text-blue-600 flex items-center justify-center"><Stethoscope className="w-7 h-7" /></div>
-                    <div>
-                      <h4 className="text-xl font-black uppercase tracking-tight">{proc.procedureType || 'Sin Procedimiento'}</h4>
-                      <div className="flex items-center gap-3 mb-1">
-                        <p className="text-blue-600 font-black text-xs uppercase tracking-widest">{proc.patientName || 'Paciente S.N.'}</p>
-                        {proc.takesAnticoagulants && (
-                          <span className="px-3 py-1 bg-rose-500/10 text-rose-500 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
-                            <Info className="w-3 h-3" /> Anticoagulante
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[10px] opacity-40 font-black uppercase tracking-widest">
-                        {proc.patientRut} {proc.patientInsurance ? `• ${proc.patientInsurance}` : ''}
-                      </p>
-                      <p className="text-[10px] opacity-40 font-black uppercase tracking-widest">
-                        {proc.clinicalCenter || 'Sede no asignada'} • {rad ? `Dr. ${rad.lastName}` : 'Sin Médico'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <StatusBadge status={proc.status} />
-                    <button
-                      onClick={() => handleEditClick(proc.id)}
-                      className="p-2.5 rounded-xl hover:bg-blue-600/10 text-blue-600 transition-all opacity-40 hover:opacity-100"
-                      title="Editar Procedimiento"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3 mt-6">
-                  <button onClick={() => setShowSchedulingModalId(proc.id)} className="px-6 py-3 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest">Gestionar Cita</button>
-                </div>
-              </div>
-            );
-          })}
         </div>
       )}
 
+      {/* Table View */}
+      {viewMode === 'table' && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden print:border-0">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                <tr>
+                  <th className="px-4 py-3 text-left w-12 print:hidden">
+                    <input type="checkbox" checked={selectedIds.size === paginatedProcedures.length && paginatedProcedures.length > 0} onChange={handleSelectAll} className="rounded border-slate-300" />
+                  </th>
+                  <TableHeader label="RUT" field="patientRut" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                  <TableHeader label="Paciente" field="patientName" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                  <TableHeader label="Procedimiento" field="procedureType" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                  <TableHeader label="Fecha" field="scheduledDate" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Médico</th>
+                  <TableHeader label="Sede" field="clinicalCenter" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Docs</th>
+                  <TableHeader label="Estado" field="status" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider print:hidden">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                {paginatedProcedures.map((proc, idx) => {
+                  const doctor = radiologists.find(r => r.id === proc.radiologistId);
+                  const docPercent = getDocCompletionPercent(proc);
+                  return (
+                    <tr key={proc.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800 ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/50'}`}>
+                      <td className="px-4 py-3 print:hidden">
+                        <input type="checkbox" checked={selectedIds.has(proc.id)} onChange={() => handleSelectOne(proc.id)} className="rounded border-slate-300" />
+                      </td>
+                      <td className="px-4 py-3 text-sm font-mono">{proc.patientRut}</td>
+                      <td className="px-4 py-3 text-sm font-medium">
+                        <div className="flex items-center gap-2">
+                          {proc.patientName}
+                          {proc.takesAnticoagulants && <AlertTriangle className="w-4 h-4 text-amber-500" title="Anticoagulantes" />}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{proc.procedureType || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                        {proc.scheduledDate ? new Date(proc.scheduledDate).toLocaleDateString('es-CL') : 'Sin programar'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{doctor ? `Dr. ${doctor.lastName}` : '-'}</td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{proc.clinicalCenter || '-'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${docPercent === 100 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {docPercent}%
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3"><StatusBadge status={proc.status} /></td>
+                      <td className="px-4 py-3 print:hidden">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => setSelectedProcedure(proc)} className="p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded text-blue-600" title="Ver detalles">
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => setEditingProcedure(proc)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-600" title="Editar">
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between print:hidden">
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-slate-600">Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredProcedures.length)} de {filteredProcedures.length}</span>
+              <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800">
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 border border-slate-300 dark:border-slate-600 rounded disabled:opacity-50">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="px-3 py-1 text-sm">{currentPage} / {totalPages || 1}</span>
+              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 border border-slate-300 dark:border-slate-600 rounded disabled:opacity-50">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Calendar View */}
       {viewMode === 'calendar' && (
-        <EnhancedCalendar isDark={isDark} procedures={userFilteredProcedures} onEdit={(id: any) => setShowSchedulingModalId(id)} />
+        <CalendarViewComponent
+          procedures={filteredProcedures}
+          radiologists={radiologists}
+          currentDate={calendarDate}
+          setCurrentDate={setCalendarDate}
+          viewType={calendarView}
+          setViewType={setCalendarView}
+          onSelectProcedure={setSelectedProcedure}
+          isDark={isDark}
+        />
       )}
 
+      {/* Stats View */}
       {viewMode === 'stats' && (
-        <ProceduresStats isDark={isDark} filteredProcedures={statsFilteredProcedures} radiologists={radiologists} />
+        <StatsViewComponent stats={stats} isDark={isDark} radiologists={radiologists} />
       )}
 
-      {
-        showCatalogModal && (
-          <CatalogModal
-            isDark={isDark}
-            catalog={catalog}
-            onClose={() => setShowCatalogModal(false)}
-            onUpdate={updateCatalogItem}
-            onAdd={addCatalogItem}
-          />
-        )
-      }
+      {/* Detail Panel */}
+      {selectedProcedure && (
+        <DetailPanel
+          procedure={selectedProcedure}
+          doctor={radiologists.find(r => r.id === selectedProcedure.radiologistId)}
+          onClose={() => setSelectedProcedure(null)}
+          onToggleRequirement={async (reqId) => {
+            await toggleRequirement(selectedProcedure.id, reqId);
+            const updated = procedures.find(p => p.id === selectedProcedure.id);
+            if (updated) setSelectedProcedure(updated);
+          }}
+          isDark={isDark}
+        />
+      )}
 
-      {
-        showModal && (
-          <ProcedureForm
-            isDark={isDark}
-            radiologists={radiologists}
-            catalog={catalog}
-            initialData={editingProcedure || undefined}
-            onClose={handleCloseForm}
-            onSubmit={async (data: any) => {
-              if (editingProcedureId) {
-                await updateProcedure(editingProcedureId, data);
-              } else {
-                await addProcedure(data);
-              }
-              handleCloseForm();
-            }}
-          />
-        )
-      }
-
-      {
-        schedulingProcedure && (
-          <SchedulingModal
-            isDark={isDark}
-            procedure={schedulingProcedure}
-            onClose={() => setShowSchedulingModalId(null)}
-            onSchedule={async (id: string, date: string) => {
-              await updateProcedure(id, { scheduledDate: date, status: 'Programado' });
-              setShowSchedulingModalId(null);
-            }}
-            onToggleReq={toggleRequirement}
-            onAttach={async (procId: string, reqId: string, fileUrl: string) => {
-              const updatedReqs = schedulingProcedure.requirements.map(r =>
-                r.id === reqId ? { ...r, fileUrl, isCompleted: true } : r
-              );
-              await updateProcedure(procId, { requirements: updatedReqs });
-            }}
-          />
-        )
-      }
-    </div >
-  );
-};
-
-// --- SUB-COMPONENTS ---
-
-const ProceduresStats = ({ isDark, filteredProcedures, radiologists }: any) => {
-  const statsData = useMemo(() => {
-    const totalExams = filteredProcedures.length;
-    const totalValue = filteredProcedures.reduce((acc: number, p: any) => acc + p.value, 0);
-    const completedExams = filteredProcedures.filter((p: any) => p.status === 'Completado').length;
-
-    const doctorStatsMap: Record<string, { count: number, value: number }> = {};
-    const centerStatsMap: Record<string, { count: number, value: number }> = {};
-    const typeStatsMap: Record<string, { count: number }> = {};
-
-    filteredProcedures.forEach((p: any) => {
-      // Per Doctor
-      const rad = radiologists.find((e: any) => e.id === p.radiologistId);
-      const drName = rad ? `Dr. ${rad.lastName}` : 'Sin Asignar';
-      if (!doctorStatsMap[drName]) doctorStatsMap[drName] = { count: 0, value: 0 };
-      doctorStatsMap[drName].count++;
-      doctorStatsMap[drName].value += p.value;
-
-      // Per Center
-      const center = p.clinicalCenter || 'Sin Sede';
-      if (!centerStatsMap[center]) centerStatsMap[center] = { count: 0, value: 0 };
-      centerStatsMap[center].count++;
-      centerStatsMap[center].value += p.value;
-
-      // Per Type
-      const type = p.procedureType || 'Otros';
-      if (!typeStatsMap[type]) typeStatsMap[type] = { count: 0 };
-      typeStatsMap[type].count++;
-    });
-
-    return {
-      totalExams,
-      totalValue,
-      completedExams,
-      avgTicket: totalExams > 0 ? Math.round(totalValue / totalExams) : 0,
-      byDoctor: Object.entries(doctorStatsMap).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.value - a.value),
-      byCenter: Object.entries(centerStatsMap).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.value - a.value),
-      byType: Object.entries(typeStatsMap).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.count - a.count)
-    };
-  }, [filteredProcedures, radiologists]);
-
-  return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* KPI Overlays */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatsMiniCard label="Volumen Total" val={statsData.totalExams} icon={<TrendingUp className="text-blue-500" />} isDark={isDark} />
-        <StatsMiniCard label="Venta Bruta" val={`$${statsData.totalValue.toLocaleString()}`} icon={<DollarSign className="text-emerald-500" />} isDark={isDark} />
-        <StatsMiniCard label="Ticket Promedio" val={`$${statsData.avgTicket.toLocaleString()}`} icon={<Target className="text-indigo-500" />} isDark={isDark} />
-        <StatsMiniCard label="Efectividad" val={statsData.totalExams > 0 ? `${Math.round((statsData.completedExams / statsData.totalExams) * 100)}%` : '0%'} icon={<CheckCircle2 className="text-blue-600" />} isDark={isDark} />
-      </div>
-
-      <div className="grid lg:grid-cols-2 gap-10">
-        {/* breakdown by doctor */}
-        <div className={`p-10 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-          <div className="flex items-center gap-4 mb-10">
-            <div className="p-3 bg-blue-600/10 text-blue-600 rounded-2xl"><Users className="w-6 h-6" /></div>
-            <h4 className="text-xl font-black uppercase tracking-tighter">Producción por Staff</h4>
-          </div>
-          <div className="space-y-8">
-            {statsData.byDoctor.length === 0 ? (
-              <p className="text-center opacity-20 py-10 font-black uppercase text-xs tracking-widest">Sin datos en el periodo</p>
-            ) : statsData.byDoctor.map((item, idx) => (
-              <div key={idx} className="space-y-2">
-                <div className="flex justify-between items-end">
-                  <span className="text-xs font-black uppercase tracking-tight">{item.name}</span>
-                  <span className="text-[10px] font-black opacity-40 uppercase">${item.value.toLocaleString()} ({item.count} ex.)</span>
-                </div>
-                <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-600 rounded-full transition-all duration-1000"
-                    style={{ width: `${(item.value / (statsData.totalValue || 1)) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* breakdown by center */}
-        <div className={`p-10 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-          <div className="flex items-center gap-4 mb-10">
-            <div className="p-3 bg-indigo-600/10 text-indigo-600 rounded-2xl"><Building2 className="w-6 h-6" /></div>
-            <h4 className="text-xl font-black uppercase tracking-tighter">Desempeño por Sedes</h4>
-          </div>
-          <div className="space-y-8">
-            {statsData.byCenter.length === 0 ? (
-              <p className="text-center opacity-20 py-10 font-black uppercase text-xs tracking-widest">Sin datos en el periodo</p>
-            ) : statsData.byCenter.map((item, idx) => (
-              <div key={idx} className="space-y-2">
-                <div className="flex justify-between items-end">
-                  <span className="text-xs font-black uppercase tracking-tight">{item.name}</span>
-                  <span className="text-[10px] font-black opacity-40 uppercase">${item.value.toLocaleString()}</span>
-                </div>
-                <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-600 rounded-full transition-all duration-1000"
-                    style={{ width: `${(item.value / (statsData.totalValue || 1)) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Breakdown by Type */}
-        <div className={`p-10 rounded-[48px] border lg:col-span-2 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-          <div className="flex items-center gap-4 mb-10">
-            <div className="p-3 bg-emerald-600/10 text-emerald-600 rounded-2xl"><PieChart className="w-6 h-6" /></div>
-            <h4 className="text-xl font-black uppercase tracking-tighter">Mix de Procedimientos</h4>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {statsData.byType.map((item, idx) => (
-              <div key={idx} className="p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] font-black uppercase opacity-30 mb-1 tracking-widest">{item.name}</p>
-                  <h5 className="text-2xl font-black">{item.count}</h5>
-                </div>
-                <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                  <Activity className="w-4 h-4 text-emerald-600" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {/* New/Edit Form Modal */}
+      {(showNewModal || editingProcedure) && (
+        <ProcedureFormModal
+          isDark={isDark}
+          procedure={editingProcedure}
+          radiologists={radiologists}
+          catalog={catalog}
+          centers={centers}
+          onClose={() => {
+            setShowNewModal(false);
+            setEditingProcedure(null);
+          }}
+          onSubmit={async (data) => {
+            if (editingProcedure) {
+              await updateProcedure(editingProcedure.id, data);
+            } else {
+              await addProcedure(data);
+            }
+            setShowNewModal(false);
+            setEditingProcedure(null);
+          }}
+        />
+      )}
     </div>
   );
 };
 
-const StatsMiniCard = ({ label, val, icon, isDark }: any) => (
-  <div className={`p-8 rounded-[32px] border transition-all ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-    <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl w-fit mb-6">{icon}</div>
-    <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">{label}</p>
-    <h3 className="text-2xl font-black tracking-tighter">{val}</h3>
-  </div>
+// === SUB COMPONENTS ===
+
+const TableHeader: React.FC<{
+  label: string;
+  field: SortField;
+  sortField: SortField;
+  sortDirection: SortDirection;
+  onSort: (field: SortField) => void;
+}> = ({ label, field, sortField, sortDirection, onSort }) => (
+  <th onClick={() => onSort(field)} className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700">
+    <div className="flex items-center gap-2">
+      {label}
+      {sortField === field && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)}
+    </div>
+  </th>
 );
 
-const EnhancedCalendar = ({ isDark, procedures, onEdit }: any) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewType, setViewType] = useState<'day' | 'week' | 'month'>('week');
+const StatusBadge: React.FC<{ status: ProcedureStatus }> = ({ status }) => {
+  const styles: Record<ProcedureStatus, string> = {
+    'Pendiente Docs': 'bg-amber-100 text-amber-700 border-amber-300',
+    'Listo': 'bg-green-100 text-green-700 border-green-300',
+    'Programado': 'bg-blue-100 text-blue-700 border-blue-300',
+    'Completado': 'bg-slate-100 text-slate-700 border-slate-300',
+    'Cancelado': 'bg-red-100 text-red-700 border-red-300'
+  };
+  return <span className={`px-2 py-1 rounded-md text-xs font-medium border ${styles[status]}`}>{status}</span>;
+};
 
-  const navigate = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
-    if (viewType === 'day') newDate.setDate(currentDate.getDate() + (direction === 'next' ? 1 : -1));
-    else if (viewType === 'week') newDate.setDate(currentDate.getDate() + (direction === 'next' ? 7 : -7));
-    else if (viewType === 'month') newDate.setMonth(currentDate.getMonth() + (direction === 'next' ? 1 : -1));
-    setCurrentDate(newDate);
+// Calendar Component
+const CalendarViewComponent: React.FC<{
+  procedures: ProcedureEntry[];
+  radiologists: Employee[];
+  currentDate: Date;
+  setCurrentDate: (d: Date) => void;
+  viewType: 'month' | 'week' | 'day';
+  setViewType: (v: 'month' | 'week' | 'day') => void;
+  onSelectProcedure: (p: ProcedureEntry) => void;
+  isDark: boolean;
+}> = ({ procedures, radiologists, currentDate, setCurrentDate, viewType, setViewType, onSelectProcedure, isDark }) => {
+  const navigate = (dir: number) => {
+    const d = new Date(currentDate);
+    if (viewType === 'month') d.setMonth(d.getMonth() + dir);
+    else if (viewType === 'week') d.setDate(d.getDate() + dir * 7);
+    else d.setDate(d.getDate() + dir);
+    setCurrentDate(d);
   };
 
-  const daysToRender = useMemo(() => {
+  const days = useMemo(() => {
     if (viewType === 'day') return [currentDate];
-
     if (viewType === 'week') {
-      const startOfWeek = new Date(currentDate);
-      startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
-      return Array.from({ length: 7 }).map((_, i) => {
-        const d = new Date(startOfWeek);
-        d.setDate(startOfWeek.getDate() + i);
-        return d;
-      });
+      const start = new Date(currentDate);
+      start.setDate(start.getDate() - start.getDay());
+      return Array.from({ length: 7 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
     }
-
-    if (viewType === 'month') {
-      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const startOfGrid = new Date(startOfMonth);
-      startOfGrid.setDate(startOfMonth.getDate() - startOfMonth.getDay());
-      return Array.from({ length: 35 }).map((_, i) => {
-        const d = new Date(startOfGrid);
-        d.setDate(startOfGrid.getDate() + i);
-        return d;
-      });
-    }
-    return [];
+    const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const startGrid = new Date(start);
+    startGrid.setDate(start.getDate() - start.getDay());
+    return Array.from({ length: 35 }, (_, i) => { const d = new Date(startGrid); d.setDate(startGrid.getDate() + i); return d; });
   }, [currentDate, viewType]);
 
-  const viewLabel = useMemo(() => {
-    if (viewType === 'day') return currentDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
-    if (viewType === 'week') {
-      const start = daysToRender[0];
-      const end = daysToRender[6];
-      return `${start.getDate()} - ${end.getDate()} ${end.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}`;
-    }
-    return currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-  }, [currentDate, viewType, daysToRender]);
+  const getProceduresForDay = (day: Date) => procedures.filter(p => p.scheduledDate && new Date(p.scheduledDate).toDateString() === day.toDateString());
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      {/* Calendar Controls */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
-          <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
-            <button onClick={() => setViewType('day')} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewType === 'day' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Día</button>
-            <button onClick={() => setViewType('week')} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewType === 'week' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Semana</button>
-            <button onClick={() => setViewType('month')} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewType === 'month' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Mes</button>
+          <div className="flex border border-slate-300 dark:border-slate-600 rounded-lg overflow-hidden">
+            {(['day', 'week', 'month'] as const).map(v => (
+              <button key={v} onClick={() => setViewType(v)} className={`px-3 py-1 text-sm ${viewType === v ? 'bg-blue-600 text-white' : ''}`}>
+                {v === 'day' ? 'Día' : v === 'week' ? 'Semana' : 'Mes'}
+              </button>
+            ))}
           </div>
-          <button onClick={() => setCurrentDate(new Date())} className="px-5 py-2.5 bg-blue-600/10 text-blue-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600/20 transition-all">Hoy</button>
+          <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">Hoy</button>
         </div>
-
-        <div className="flex items-center gap-6">
-          <h4 className="text-sm font-black uppercase tracking-widest opacity-60 min-w-[180px] text-center">{viewLabel}</h4>
-          <div className="flex gap-2">
-            <button onClick={() => navigate('prev')} className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><ChevronLeft className="w-4 h-4" /></button>
-            <button onClick={() => navigate('next')} className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"><ChevronRight className="w-4 h-4" /></button>
-          </div>
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><ChevronLeft className="w-5 h-5" /></button>
+          <span className="text-lg font-semibold min-w-[200px] text-center">
+            {currentDate.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}
+          </span>
+          <button onClick={() => navigate(1)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"><ChevronRight className="w-5 h-5" /></button>
         </div>
       </div>
 
-      {/* Grid Rendering */}
-      <div className={`grid gap-6 ${viewType === 'day' ? 'grid-cols-1' : 'grid-cols-7'}`}>
-        {daysToRender.map((day, idx) => {
+      <div className={`grid gap-1 ${viewType === 'day' ? 'grid-cols-1' : 'grid-cols-7'}`}>
+        {viewType !== 'day' && ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => (
+          <div key={d} className="text-center text-xs font-semibold text-slate-500 py-2">{d}</div>
+        ))}
+        {days.map((day, i) => {
+          const procs = getProceduresForDay(day);
           const isToday = day.toDateString() === new Date().toDateString();
-          const isOtherMonth = day.getMonth() !== currentDate.getMonth() && viewType === 'month';
-          const dayProcs = procedures.filter((p: any) => p.scheduledDate && new Date(p.scheduledDate).toDateString() === day.toDateString());
-
+          const isOtherMonth = viewType === 'month' && day.getMonth() !== currentDate.getMonth();
           return (
-            <div key={idx} className={`space-y-4 ${viewType === 'month' ? 'min-h-[140px]' : 'min-h-[400px]'} ${isOtherMonth ? 'opacity-20' : ''}`}>
-              {viewType !== 'month' && (
-                <div className={`p-4 rounded-3xl text-center transition-all ${isToday ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                  <p className={`text-[10px] font-black uppercase tracking-widest ${isToday ? 'opacity-70' : 'opacity-30'}`}>{day.toLocaleString('es-ES', { weekday: 'short' })}</p>
-                  <p className="text-2xl font-black leading-none mt-1">{day.getDate()}</p>
-                </div>
-              )}
-
-              {viewType === 'month' && (
-                <div className="flex justify-between items-center px-4">
-                  <span className={`text-[10px] font-black ${isToday ? 'text-blue-600' : 'opacity-30'}`}>{day.getDate()}</span>
-                  {dayProcs.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>}
-                </div>
-              )}
-
-              <div className={`flex flex-col gap-2 ${viewType !== 'month' ? 'pt-4 border-t border-slate-100 dark:border-slate-800' : ''}`}>
-                {dayProcs.length === 0 && viewType === 'day' && (
-                  <div className="py-20 text-center opacity-20 italic">
-                    <CalendarIcon className="w-12 h-12 mx-auto mb-4" />
-                    <p className="text-xs font-black uppercase tracking-widest">Sin procedimientos agendados</p>
-                  </div>
-                )}
-                {dayProcs.map((p: any) => (
-                  <div
-                    key={p.id}
-                    onClick={() => onEdit(p.id)}
-                    className={`p-4 rounded-2xl border text-[10px] font-black uppercase cursor-pointer transition-all hover:scale-[1.02] shadow-sm relative overflow-hidden group
-                      ${isDark ? 'bg-slate-900 border-slate-800 hover:border-blue-500' : 'bg-white border-slate-100 hover:border-blue-500'}`}
-                  >
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600"></div>
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="text-blue-600 group-hover:underline truncate">{p.patientName || 'Paciente S.N.'}</span>
-                      <span className="text-[8px] opacity-40 whitespace-nowrap">{p.scheduledDate?.split('T')[1]}</span>
-                    </div>
-                    <p className="text-[8px] opacity-40 truncate">{p.procedureType || 'Sin procedimiento'}</p>
-                    {p.takesAnticoagulants && <div className="mt-2 w-2 h-2 rounded-full bg-rose-500 ml-auto"></div>}
+            <div key={i} className={`min-h-[100px] p-2 border border-slate-200 dark:border-slate-700 rounded ${isOtherMonth ? 'opacity-30' : ''} ${isToday ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+              <div className={`text-sm font-medium ${isToday ? 'text-blue-600' : ''}`}>{day.getDate()}</div>
+              <div className="mt-1 space-y-1">
+                {procs.slice(0, 3).map(p => (
+                  <div key={p.id} onClick={() => onSelectProcedure(p)} className="text-xs p-1 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 truncate cursor-pointer hover:bg-blue-200">
+                    {p.patientName.split(' ')[0]}
                   </div>
                 ))}
+                {procs.length > 3 && <div className="text-xs text-slate-500">+{procs.length - 3} más</div>}
               </div>
             </div>
           );
@@ -548,428 +663,391 @@ const EnhancedCalendar = ({ isDark, procedures, onEdit }: any) => {
   );
 };
 
-const StatCard = ({ label, val, icon, isDark }: any) => (
-  <div className={`p-6 rounded-[32px] border transition-all hover:border-blue-500/30 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
-    <div className="flex items-center gap-4">
-      <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl">{icon}</div>
-      <div>
-        <p className="text-[9px] font-black uppercase tracking-widest opacity-40 mb-0.5 leading-none">{label}</p>
-        <h3 className="text-xl font-black tracking-tighter leading-none">{val}</h3>
+// Stats Component
+const StatsViewComponent: React.FC<{
+  stats: any;
+  isDark: boolean;
+  radiologists: Employee[];
+}> = ({ stats, isDark }) => {
+  return (
+    <div className="space-y-6">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KPICard label="Total Procedimientos" value={stats.total} icon={<Activity className="w-6 h-6" />} color="blue" />
+        <KPICard label="Pendientes Docs" value={stats.pending} icon={<FileText className="w-6 h-6" />} color="amber" />
+        <KPICard label="Completados" value={stats.completed} icon={<CheckCircle2 className="w-6 h-6" />} color="green" />
+        <KPICard label="Facturación Total" value={`$${stats.totalValue.toLocaleString('es-CL')}`} icon={<DollarSign className="w-6 h-6" />} color="indigo" />
+      </div>
+
+      {/* Charts */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        <div className={`p-6 rounded-lg border ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <h3 className="text-lg font-bold mb-4">Por Estado</h3>
+          <div className="space-y-3">
+            {Object.entries(stats.byStatus).map(([status, count]: [string, any]) => (
+              <div key={status} className="flex items-center gap-3">
+                <StatusBadge status={status as ProcedureStatus} />
+                <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-4 overflow-hidden">
+                  <div className="bg-blue-600 h-full" style={{ width: `${(count / stats.total) * 100}%` }} />
+                </div>
+                <span className="text-sm font-medium w-12 text-right">{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className={`p-6 rounded-lg border ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <h3 className="text-lg font-bold mb-4">Por Médico</h3>
+          <div className="space-y-3">
+            {Object.entries(stats.byDoctor).slice(0, 5).map(([name, data]: [string, any]) => (
+              <div key={name} className="flex items-center gap-3">
+                <span className="text-sm w-32 truncate">{name}</span>
+                <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-4 overflow-hidden">
+                  <div className="bg-indigo-600 h-full" style={{ width: `${(data.count / stats.total) * 100}%` }} />
+                </div>
+                <span className="text-sm font-medium w-20 text-right">${data.value.toLocaleString('es-CL')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className={`p-6 rounded-lg border lg:col-span-2 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <h3 className="text-lg font-bold mb-4">Por Sede Clínica</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Object.entries(stats.byCenter).map(([center, count]: [string, any]) => (
+              <div key={center} className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg text-center">
+                <div className="text-2xl font-bold text-blue-600">{count}</div>
+                <div className="text-sm text-slate-500 mt-1">{center}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-);
-
-const StatusBadge = ({ status }: { status: ProcedureStatus }) => {
-  const styles = { 'Pendiente Docs': 'bg-amber-500/10 text-amber-500', 'Listo': 'bg-blue-500/10 text-blue-600', 'Programado': 'bg-indigo-500/10 text-indigo-600', 'Completado': 'bg-emerald-500/10 text-emerald-500', 'Cancelado': 'bg-rose-500/10 text-rose-500' };
-  return <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${styles[status]}`}>{status}</span>;
+  );
 };
 
-// --- MODALS ---
+const KPICard: React.FC<{ label: string; value: string | number; icon: React.ReactNode; color: string }> = ({ label, value, icon, color }) => {
+  const colors: Record<string, string> = {
+    blue: 'bg-blue-50 text-blue-600 dark:bg-blue-900/20',
+    amber: 'bg-amber-50 text-amber-600 dark:bg-amber-900/20',
+    green: 'bg-green-50 text-green-600 dark:bg-green-900/20',
+    indigo: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20'
+  };
+  return (
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
+      <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${colors[color]}`}>{icon}</div>
+      <p className="text-sm text-slate-500">{label}</p>
+      <p className="text-2xl font-bold mt-1">{value}</p>
+    </div>
+  );
+};
 
-const ProcedureForm = ({ isDark, radiologists, catalog, onClose, onSubmit, initialData }: any) => {
-  const [patientName, setPatientName] = useState(initialData?.patientName || '');
-  const [patientRut, setPatientRut] = useState(initialData?.patientRut || '');
-  const [patientPhone, setPatientPhone] = useState(initialData?.patientPhone || '');
-  const [patientEmail, setPatientEmail] = useState(initialData?.patientEmail || '');
-  const [patientInsurance, setPatientInsurance] = useState(initialData?.patientInsurance || '');
-  const [patientBirthDate, setPatientBirthDate] = useState(initialData?.patientBirthDate || '');
-  const [patientAddress, setPatientAddress] = useState(initialData?.patientAddress || '');
-  const [takesAnticoagulants, setTakesAnticoagulants] = useState(initialData?.takesAnticoagulants || false);
-  const [catItemId, setCatItemId] = useState('');
-  const [radiologistId, setRadiologistId] = useState(initialData?.radiologistId || '');
-  const [clinicalCenter, setClinicalCenter] = useState(initialData?.clinicalCenter || '');
+// Detail Panel with Documents
+const DetailPanel: React.FC<{
+  procedure: ProcedureEntry;
+  doctor: any;
+  onClose: () => void;
+  onToggleRequirement: (reqId: string) => void;
+  isDark: boolean;
+}> = ({ procedure, doctor, onClose, onToggleRequirement, isDark }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Si estamos editando, intentamos encontrar el item del catálogo por el nombre del procedimiento
-  useEffect(() => {
-    if (initialData?.procedureType) {
-      const item = catalog.find((i: any) => i.name === initialData.procedureType);
-      if (item) setCatItemId(item.id);
-    }
-  }, [initialData, catalog]);
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex justify-end print:hidden" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-2xl h-full overflow-y-auto ${isDark ? 'bg-slate-900' : 'bg-white'} shadow-2xl`}>
+        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between z-10">
+          <h3 className="text-lg font-bold">Detalles del Procedimiento</h3>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><X className="w-5 h-5" /></button>
+        </div>
 
-  const selectedItem = catalog.find((i: any) => i.id === catItemId);
+        <div className="p-6 space-y-6">
+          {/* Patient Info */}
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 flex items-center gap-2"><User className="w-4 h-4" /> Paciente</h4>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><p className="text-slate-500">Nombre</p><p className="font-medium">{procedure.patientName}</p></div>
+              <div><p className="text-slate-500">RUT</p><p className="font-mono font-medium">{procedure.patientRut}</p></div>
+              <div><p className="text-slate-500">Teléfono</p><p className="font-medium flex items-center gap-1"><Phone className="w-3 h-3" />{procedure.patientPhone}</p></div>
+              <div><p className="text-slate-500">Email</p><p className="font-medium flex items-center gap-1"><Mail className="w-3 h-3" />{procedure.patientEmail}</p></div>
+              {procedure.takesAnticoagulants && (
+                <div className="col-span-2">
+                  <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded">
+                    <AlertTriangle className="w-4 h-4" /><span className="font-medium">Toma anticoagulantes</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Procedure Info */}
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 flex items-center gap-2"><Stethoscope className="w-4 h-4" /> Procedimiento</h4>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><p className="text-slate-500">Procedimiento</p><p className="font-medium">{procedure.procedureType}</p></div>
+              <div><p className="text-slate-500">Modalidad</p><p className="font-medium">{procedure.modality}</p></div>
+              <div><p className="text-slate-500">Fecha</p><p className="font-medium">{procedure.scheduledDate ? new Date(procedure.scheduledDate).toLocaleDateString('es-CL') : 'Sin programar'}</p></div>
+              <div><p className="text-slate-500">Estado</p><StatusBadge status={procedure.status} /></div>
+              <div><p className="text-slate-500">Médico</p><p className="font-medium">{doctor ? `Dr. ${doctor.lastName}` : 'Sin asignar'}</p></div>
+              <div><p className="text-slate-500">Sede</p><p className="font-medium">{procedure.clinicalCenter || 'Sin sede'}</p></div>
+              <div><p className="text-slate-500">Valor</p><p className="font-medium">${procedure.value.toLocaleString('es-CL')}</p></div>
+            </div>
+          </div>
+
+          {/* Documents Checklist */}
+          <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
+            <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 flex items-center gap-2">
+              <FileText className="w-4 h-4" /> Documentación Requerida
+              <span className="ml-auto text-xs font-normal">
+                {procedure.requirements?.filter(r => r.isCompleted).length || 0} / {procedure.requirements?.length || 0} completados
+              </span>
+            </h4>
+            <div className="space-y-2">
+              {(!procedure.requirements || procedure.requirements.length === 0) ? (
+                <p className="text-sm text-slate-500 text-center py-4">Sin documentos requeridos</p>
+              ) : (
+                procedure.requirements.map((req) => (
+                  <div key={req.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => onToggleRequirement(req.id)} className={`w-6 h-6 rounded border-2 flex items-center justify-center ${req.isCompleted ? 'bg-green-600 border-green-600 text-white' : 'border-slate-300'}`}>
+                        {req.isCompleted && <Check className="w-4 h-4" />}
+                      </button>
+                      <span className={`text-sm ${req.isCompleted ? 'line-through text-slate-400' : ''}`}>{req.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {req.fileUrl ? (
+                        <a href={req.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 text-sm hover:underline flex items-center gap-1">
+                          <Eye className="w-4 h-4" /> Ver
+                        </a>
+                      ) : (
+                        <button className="text-sm text-slate-500 hover:text-blue-600 flex items-center gap-1">
+                          <Upload className="w-4 h-4" /> Subir
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Procedure Form Modal
+const ProcedureFormModal: React.FC<{
+  isDark: boolean;
+  procedure: ProcedureEntry | null;
+  radiologists: Employee[];
+  catalog: any[];
+  centers: string[];
+  onClose: () => void;
+  onSubmit: (data: any) => void;
+}> = ({ isDark, procedure, radiologists, catalog, centers, onClose, onSubmit }) => {
+  const [patientName, setPatientName] = useState(procedure?.patientName || '');
+  const [patientRut, setPatientRut] = useState(procedure?.patientRut || '');
+  const [patientPhone, setPatientPhone] = useState(procedure?.patientPhone || '');
+  const [patientEmail, setPatientEmail] = useState(procedure?.patientEmail || '');
+  const [patientInsurance, setPatientInsurance] = useState(procedure?.patientInsurance || '');
+  const [takesAnticoagulants, setTakesAnticoagulants] = useState(procedure?.takesAnticoagulants || false);
+  const [procedureType, setProcedureType] = useState(procedure?.procedureType || '');
+  const [radiologistId, setRadiologistId] = useState(procedure?.radiologistId || '');
+  const [clinicalCenter, setClinicalCenter] = useState(procedure?.clinicalCenter || '');
+  const [scheduledDate, setScheduledDate] = useState(procedure?.scheduledDate || '');
+  const [status, setStatus] = useState<ProcedureStatus>(procedure?.status || 'Pendiente Docs');
+
+  const selectedCatalogItem = catalog.find(c => c.name === procedureType);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    const baseData = {
+    onSubmit({
       patientName,
       patientRut,
       patientPhone,
       patientEmail,
       patientInsurance,
-      patientBirthDate,
-      patientAddress,
       takesAnticoagulants,
-      procedureType: selectedItem?.name || '',
-      value: selectedItem?.baseValue || 0,
-      modality: selectedItem?.defaultModality || 'US',
-      referringPhysician: initialData?.referringPhysician || 'Manual',
+      procedureType,
+      modality: selectedCatalogItem?.defaultModality || 'US',
+      value: selectedCatalogItem?.baseValue || 0,
       radiologistId,
-      clinicalCenter
-    };
-
-    onSubmit(baseData);
+      clinicalCenter,
+      scheduledDate,
+      status,
+      referringPhysician: 'Manual',
+      requirements: selectedCatalogItem?.requiredDocs?.map((doc: string, i: number) => ({
+        id: `req-${i}`,
+        name: doc,
+        isCompleted: false
+      })) || []
+    });
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
-      <div className="absolute inset-0" onClick={onClose} />
-      <div className={`relative w-full max-w-2xl p-12 rounded-[56px] border animate-in zoom-in-95 duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
-        <div className="flex items-center justify-between mb-10">
-          <h3 className="text-3xl font-black uppercase tracking-tighter">
-            {initialData ? 'Editar Caso' : 'Registrar Nuevo Caso'}
-          </h3>
-          <button onClick={onClose} className="p-3 opacity-40 hover:opacity-100 transition-all rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"><X className="w-6 h-6" /></button>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        onClick={e => e.stopPropagation()}
+        className={`w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl ${isDark ? 'bg-slate-900' : 'bg-white'} shadow-2xl`}
+      >
+        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between z-10">
+          <h3 className="text-lg font-bold">{procedure ? 'Editar Procedimiento' : 'Nuevo Paciente'}</h3>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-2 gap-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Nombre del Paciente</label>
-              <input value={patientName} onChange={e => setPatientName(e.target.value)} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-600' : 'bg-slate-50 border-slate-100 focus:bg-white'}`} />
+              <label className="block text-sm font-medium mb-1">Nombre del Paciente *</label>
+              <input
+                type="text"
+                required
+                value={patientName}
+                onChange={e => setPatientName(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+              />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">RUT / ID</label>
-              <input value={patientRut} onChange={e => setPatientRut(e.target.value)} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-600' : 'bg-slate-50 border-slate-100 focus:bg-white'}`} />
+              <label className="block text-sm font-medium mb-1">RUT *</label>
+              <input
+                type="text"
+                required
+                value={patientRut}
+                onChange={e => setPatientRut(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+              />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Teléfono</label>
-              <input value={patientPhone} onChange={e => setPatientPhone(e.target.value)} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-600' : 'bg-slate-50 border-slate-100 focus:bg-white'}`} />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Correo Electrónico</label>
-              <input type="email" value={patientEmail} onChange={e => setPatientEmail(e.target.value)} placeholder="paciente@ejemplo.com" className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-600' : 'bg-slate-50 border-slate-100 focus:bg-white'}`} />
-            </div>
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Previsión Salud</label>
-              <input value={patientInsurance} onChange={e => setPatientInsurance(e.target.value)} placeholder="Ej. Fonasa, Isapre..." className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-600' : 'bg-slate-50 border-slate-100 focus:bg-white'}`} />
+              <label className="block text-sm font-medium mb-1">Teléfono</label>
+              <input
+                type="tel"
+                value={patientPhone}
+                onChange={e => setPatientPhone(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+              />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Fecha de Nacimiento</label>
-              <input type="date" value={patientBirthDate} onChange={e => setPatientBirthDate(e.target.value)} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-600' : 'bg-slate-50 border-slate-100 focus:bg-white'}`} />
+              <label className="block text-sm font-medium mb-1">Email</label>
+              <input
+                type="email"
+                value={patientEmail}
+                onChange={e => setPatientEmail(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Previsión</label>
+              <input
+                type="text"
+                value={patientInsurance}
+                onChange={e => setPatientInsurance(e.target.value)}
+                placeholder="Fonasa, Isapre..."
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+              />
             </div>
             <div className="col-span-2">
-              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Dirección Particular</label>
-              <input value={patientAddress} onChange={e => setPatientAddress(e.target.value)} placeholder="Calle, Número, Ciudad" className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700 focus:border-blue-600' : 'bg-slate-50 border-slate-100 focus:bg-white'}`} />
-            </div>
-            <div className="col-span-2">
-              <label className="flex items-center gap-4 p-5 rounded-2xl border cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                <input type="checkbox" checked={takesAnticoagulants} onChange={e => setTakesAnticoagulants(e.target.checked)} className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-600" />
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-60">¿El paciente toma anticoagulantes?</span>
-                {takesAnticoagulants && (
-                  <span className="ml-auto text-rose-500 font-black text-[9px] uppercase tracking-widest flex items-center gap-2">
-                    <Info className="w-4 h-4" /> Alerta Médica
-                  </span>
-                )}
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={takesAnticoagulants}
+                  onChange={e => setTakesAnticoagulants(e.target.checked)}
+                  className="rounded border-slate-300"
+                />
+                <span className="text-sm">¿Toma anticoagulantes?</span>
+                {takesAnticoagulants && <AlertTriangle className="w-4 h-4 text-amber-500" />}
               </label>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Procedimiento del Catálogo</label>
-              <select value={catItemId} onChange={e => setCatItemId(e.target.value)} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                <option value="">Seleccione...</option>
-                {catalog.filter((i: any) => i.active).map((item: any) => <option key={item.id} value={item.id}>{item.name} (${item.baseValue.toLocaleString()})</option>)}
+          <hr className="border-slate-200 dark:border-slate-700" />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium mb-1">Procedimiento *</label>
+              <select
+                required
+                value={procedureType}
+                onChange={e => setProcedureType(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+              >
+                <option value="">Seleccionar...</option>
+                {catalog.filter(c => c.active).map(c => (
+                  <option key={c.id} value={c.name}>{c.name} (${c.baseValue.toLocaleString()})</option>
+                ))}
               </select>
             </div>
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Radiólogo Responsable</label>
-                <select value={radiologistId} onChange={e => setRadiologistId(e.target.value)} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-                  <option value="">Asignar...</option>
-                  {radiologists.map((r: any) => <option key={r.id} value={r.id}>Dr. {r.lastName}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Sede Clínica</label>
-                <input value={clinicalCenter} onChange={e => setClinicalCenter(e.target.value)} placeholder="Ej. Hospital Regional" className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`} />
-              </div>
-            </div>
-          </div>
-
-          <button type="submit" className="w-full py-6 bg-blue-600 text-white rounded-[32px] font-black text-xs uppercase tracking-widest shadow-2xl shadow-blue-500/30 hover:scale-[1.02] active:scale-95 transition-all">
-            {initialData ? 'Guardar Cambios' : 'Crear Entrada en Agenda'}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-const CatalogModal = ({ isDark, catalog, onClose, onUpdate, onAdd }: any) => {
-  const [isAdding, setIsAdding] = useState(false);
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: '', baseValue: 0, defaultModality: 'US' as ProcedureModality, requiredDocs: [] as string[] });
-  const [docInput, setDocInput] = useState('');
-
-  const resetForm = () => {
-    setFormData({ name: '', baseValue: 0, defaultModality: 'US', requiredDocs: [] });
-    setIsAdding(false);
-    setEditingItemId(null);
-    setDocInput('');
-  };
-
-  const handleEditInit = (item: ProcedureCatalogItem) => {
-    setFormData({
-      name: item.name,
-      baseValue: item.baseValue,
-      defaultModality: item.defaultModality,
-      requiredDocs: item.requiredDocs || []
-    });
-    setEditingItemId(item.id);
-    setIsAdding(false);
-  };
-
-  const handleSave = () => {
-    if (!formData.name) return;
-    if (editingItemId) {
-      onUpdate(editingItemId, formData);
-    } else {
-      onAdd({ ...formData, active: true });
-    }
-    resetForm();
-  };
-
-  const handleAddDocTag = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      const val = docInput.trim().replace(',', '');
-      if (val && !formData.requiredDocs.includes(val)) {
-        setFormData({ ...formData, requiredDocs: [...formData.requiredDocs, val] });
-        setDocInput('');
-      }
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
-      <div className="absolute inset-0" onClick={onClose} />
-      <div className={`relative w-full max-w-5xl p-12 rounded-[56px] border animate-in zoom-in-95 duration-300 flex flex-col max-h-[85vh] ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
-        <div className="flex items-center justify-between mb-10">
-          <div>
-            <h3 className="text-3xl font-black uppercase tracking-tighter">Catálogo de Procedimientos</h3>
-            <p className="text-[10px] font-black opacity-40 uppercase tracking-widest mt-1">Configuración de valores base, modalidades y documentación requerida.</p>
-          </div>
-          <button onClick={() => setIsAdding(true)} className="p-4 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-500/20 hover:scale-105 transition-all"><Plus className="w-5 h-5" /></button>
-        </div>
-
-        <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar space-y-4">
-          {(isAdding || editingItemId) && (
-            <div className="p-8 rounded-[40px] border-2 border-dashed border-blue-500/30 bg-blue-500/5 animate-in slide-in-from-top-4 space-y-6">
-              <div className="flex items-center gap-6">
-                <input autoFocus placeholder="Nombre procedimiento..." value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="flex-grow bg-transparent outline-none font-black text-xl uppercase tracking-tight" />
-                <input type="number" placeholder="Valor $" value={formData.baseValue} onChange={e => setFormData({ ...formData, baseValue: Number(e.target.value) })} className="w-32 bg-transparent outline-none font-black text-lg border-b border-blue-500/20" />
-                <select value={formData.defaultModality} onChange={e => setFormData({ ...formData, defaultModality: e.target.value as any })} className="bg-transparent outline-none font-black text-xs uppercase tracking-widest border-b border-blue-500/20">
-                  <option value="US">US</option>
-                  <option value="TAC">TAC</option>
-                  <option value="RM">RM</option>
-                  <option value="Rx">Rx</option>
-                  <option value="Mamografía">Mamografía</option>
-                </select>
-              </div>
-
-              <div className="space-y-3">
-                <label className="block text-[10px] font-black uppercase tracking-widest opacity-40">Listado de Documentación Requerida (Pulsa Enter para añadir)</label>
-                <div className={`flex flex-wrap gap-2 p-4 rounded-2xl border transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                  {formData.requiredDocs.map((doc, idx) => (
-                    <span key={idx} className="bg-blue-600 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm animate-in zoom-in-90">
-                      {doc} <X className="w-3 h-3 cursor-pointer hover:scale-125" onClick={() => setFormData({ ...formData, requiredDocs: formData.requiredDocs.filter((_, i) => i !== idx) })} />
-                    </span>
-                  ))}
-                  <input
-                    type="text"
-                    value={docInput}
-                    onChange={e => setDocInput(e.target.value)}
-                    onKeyDown={handleAddDocTag}
-                    placeholder="Añadir requisito..."
-                    className="flex-grow bg-transparent outline-none text-xs font-bold p-1 min-w-[150px]"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <button onClick={resetForm} className="px-8 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-[10px] font-black uppercase tracking-widest">Cancelar</button>
-                <button onClick={handleSave} className="px-10 py-3 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4" /> Guardar Definición
-                </button>
-              </div>
-            </div>
-          )}
-
-          {catalog.map((item: any) => (
-            <div key={item.id} className={`p-8 rounded-[40px] border flex flex-col gap-6 transition-all hover:border-blue-500/30 ${isDark ? 'bg-slate-800/40 border-slate-800' : 'bg-slate-50 border-slate-100 shadow-sm'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-6">
-                  <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-900 flex items-center justify-center shadow-sm font-black text-xs text-blue-600 border border-slate-100 dark:border-slate-800">
-                    {item.defaultModality}
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-black uppercase tracking-tight leading-none mb-1">{item.name}</h4>
-                    <p className="text-[10px] font-bold opacity-40 uppercase tracking-widest">Valor Base: ${item.baseValue.toLocaleString()}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => onUpdate(item.id, { active: !item.active })}
-                    className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest transition-all ${item.active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}
-                  >
-                    {item.active ? 'Activo' : 'Inactivo'}
-                  </button>
-                  <button
-                    onClick={() => handleEditInit(item)}
-                    className="p-3 rounded-xl hover:bg-blue-600/10 text-blue-600 transition-all opacity-40 hover:opacity-100"
-                    title="Editar Definición de Catálogo"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Requirements Preview */}
-              <div className="pt-4 border-t border-slate-200/50 dark:border-slate-700/50">
-                <div className="flex items-center gap-3 mb-3">
-                  <ClipboardCheck className="w-3.5 h-3.5 opacity-30" />
-                  <p className="text-[9px] font-black uppercase tracking-widest opacity-30">Documentos Requeridos por Protocolo</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {item.requiredDocs?.length > 0 ? item.requiredDocs.map((doc: string, idx: number) => (
-                    <span key={idx} className="px-3 py-1.5 bg-slate-200/50 dark:bg-slate-800/50 rounded-xl text-[8px] font-black uppercase tracking-tight opacity-60">
-                      {doc}
-                    </span>
-                  )) : (
-                    <p className="text-[8px] font-black uppercase opacity-20 italic">Sin documentos específicos definidos</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800 text-center">
-          <button onClick={onClose} className="px-10 py-4 font-black text-[10px] uppercase opacity-40 hover:opacity-100 transition-opacity">Cerrar Catálogo</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const SchedulingModal = ({ isDark, procedure, onClose, onSchedule, onToggleReq, onAttach }: { isDark: boolean, procedure: ProcedureEntry, onClose: () => void, onSchedule: (id: string, date: string) => void, onToggleReq: (pId: string, rId: string) => void, onAttach: (pId: string, rId: string, url: string) => void }) => {
-  const [date, setDate] = useState(procedure.scheduledDate?.split('T')[0] || '');
-  const [time, setTime] = useState(procedure.scheduledDate?.split('T')[1] || '09:00');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [activeReqId, setActiveReqId] = useState<string | null>(null);
-
-  const handleConfirm = () => {
-    if (!date) return;
-    onSchedule(procedure.id, `${date}T${time}`);
-  };
-
-  const handleFileClick = (reqId: string) => {
-    setActiveReqId(reqId);
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && activeReqId) {
-      // Mock upload
-      const mockUrl = URL.createObjectURL(file);
-      onAttach(procedure.id, activeReqId, mockUrl);
-      setActiveReqId(null);
-    }
-  };
-
-  const allRequirementsMet = procedure.requirements.every(r => r.isCompleted);
-
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
-      <div className="absolute inset-0" onClick={onClose} />
-      <div className={`relative w-full max-w-2xl p-12 rounded-[56px] border animate-in zoom-in-95 duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h3 className="text-3xl font-black uppercase tracking-tighter leading-none mb-2">Gestionar Cita</h3>
-            <p className="text-blue-600 font-black text-xs uppercase tracking-widest">{procedure.patientName || 'Paciente S.N.'} • {procedure.patientRut}</p>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-              {procedure.patientInsurance && <p className="text-[10px] opacity-40 font-bold uppercase tracking-widest">Previsión: {procedure.patientInsurance}</p>}
-              {procedure.patientBirthDate && <p className="text-[10px] opacity-40 font-bold uppercase tracking-widest">Nacimiento: {new Date(procedure.patientBirthDate).toLocaleDateString()}</p>}
-              {procedure.takesAnticoagulants && (
-                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-rose-500/10 text-rose-500 rounded-md text-[9px] font-black uppercase tracking-widest">
-                  <Info className="w-3 h-3" /> Anticoagulante
-                </div>
-              )}
-            </div>
-          </div>
-          <button onClick={onClose} className="p-3 opacity-40 hover:opacity-100"><X className="w-6 h-6" /></button>
-        </div>
-
-        <div className="space-y-8">
-          {/* Documentation Checklist Section */}
-          <div className={`p-8 rounded-[40px] border ${isDark ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-            <h4 className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-6 flex items-center gap-2">
-              <ClipboardCheck className="w-4 h-4" /> Checklist Documentación Requerida
-            </h4>
-            <div className="space-y-3">
-              {procedure.requirements.map(req => (
-                <div key={req.id} className="flex items-center justify-between p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 group">
-                  <div className="flex items-center gap-4">
-                    <button
-                      onClick={() => onToggleReq(procedure.id, req.id)}
-                      className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${req.isCompleted ? 'bg-emerald-500 border-emerald-500' : 'border-slate-200 dark:border-slate-700'}`}
-                    >
-                      {req.isCompleted && <Check className="w-4 h-4 text-white" />}
-                    </button>
-                    <span className={`text-xs font-bold uppercase ${req.isCompleted ? 'opacity-40 line-through' : ''}`}>{req.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {req.fileUrl && (
-                      <button className="p-2 text-blue-500 hover:bg-blue-500/10 rounded-lg">
-                        <Paperclip className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleFileClick(req.id)}
-                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-600/10 rounded-lg"
-                      title="Adjuntar Documento"
-                    >
-                      <UploadCloud className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-              <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-            </div>
-            {!allRequirementsMet && (
-              <p className="mt-4 text-[9px] font-black uppercase text-amber-500 italic">Requisitos pendientes de revisión.</p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Seleccione Fecha</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`} />
+              <label className="block text-sm font-medium mb-1">Médico Responsable</label>
+              <select
+                value={radiologistId}
+                onChange={e => setRadiologistId(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+              >
+                <option value="">Sin asignar</option>
+                {radiologists.map(r => (
+                  <option key={r.id} value={r.id}>Dr. {r.lastName}</option>
+                ))}
+              </select>
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3 ml-2">Hora Sugerida</label>
-              <input type="time" value={time} onChange={e => setTime(e.target.value)} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`} />
+              <label className="block text-sm font-medium mb-1">Sede Clínica</label>
+              <input
+                type="text"
+                list="centers-list"
+                value={clinicalCenter}
+                onChange={e => setClinicalCenter(e.target.value)}
+                placeholder="Ej. Hospital Regional"
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+              />
+              <datalist id="centers-list">
+                {centers.map(c => <option key={c} value={c} />)}
+              </datalist>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Fecha Programada</label>
+              <input
+                type="datetime-local"
+                value={scheduledDate}
+                onChange={e => setScheduledDate(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Estado</label>
+              <select
+                value={status}
+                onChange={e => setStatus(e.target.value as ProcedureStatus)}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+              >
+                <option value="Pendiente Docs">Pendiente Docs</option>
+                <option value="Listo">Listo</option>
+                <option value="Programado">Programado</option>
+                <option value="Completado">Completado</option>
+                <option value="Cancelado">Cancelado</option>
+              </select>
             </div>
           </div>
 
-          <div className="pt-6">
+          <div className="flex justify-end gap-3 pt-4">
             <button
-              disabled={!date}
-              onClick={handleConfirm}
-              className="w-full py-5 bg-blue-600 text-white rounded-[32px] font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-500/20 disabled:opacity-30 transition-all hover:scale-[1.02] active:scale-95"
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
             >
-              Confirmar en Agenda
+              Cancelar
             </button>
-            {!allRequirementsMet && (
-              <p className="text-center text-[9px] font-black uppercase opacity-30 mt-4 tracking-widest">Procedimiento agendado con documentación parcial</p>
-            )}
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              {procedure ? 'Guardar Cambios' : 'Crear Procedimiento'}
+            </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
