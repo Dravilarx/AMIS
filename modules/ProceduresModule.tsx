@@ -20,12 +20,12 @@ interface Props {
 
 type SortField = 'patientName' | 'patientRut' | 'procedureType' | 'scheduledDate' | 'status' | 'clinicalCenter';
 type SortDirection = 'asc' | 'desc';
-type ViewMode = 'table' | 'calendar' | 'stats';
+type ViewMode = 'table' | 'calendar' | 'stats' | 'instructions';
 
 const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
   const { employees } = useEmployees();
   const { procedures, catalog, addProcedure, updateProcedure, deleteProcedure, toggleRequirement } = useProcedures();
-  const { instructions, getInstructionForProcedure } = useInstructions();
+  const { instructions, getInstructionForProcedure, addInstruction, updateInstruction, deleteInstruction } = useInstructions();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,6 +48,8 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
   const [showBatchActions, setShowBatchActions] = useState(false);
   const [batchStatus, setBatchStatus] = useState<ProcedureStatus | ''>('');
+  const [editingInstruction, setEditingInstruction] = useState<ProcedureInstructions | null>(null);
+  const [showInstructionModal, setShowInstructionModal] = useState(false);
 
   const radiologists = useMemo(() => employees.filter(e => e.role === 'Médico'), [employees]);
   const centers = useMemo(() => [...new Set(procedures.map(p => p.clinicalCenter).filter(Boolean))], [procedures]);
@@ -288,9 +290,15 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
             </button>
             <button
               onClick={() => setViewMode('stats')}
-              className={`px-3 py-2 text-sm font-medium ${viewMode === 'stats' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              className={`px-3 py-2 text-sm font-medium border-r border-slate-300 dark:border-slate-600 ${viewMode === 'stats' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
             >
               Estadísticas
+            </button>
+            <button
+              onClick={() => setViewMode('instructions')}
+              className={`px-3 py-2 text-sm font-medium rounded-r-lg ${viewMode === 'instructions' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+            >
+              <span className="flex items-center gap-1.5"><Send className="w-3.5 h-3.5" /> Indicaciones</span>
             </button>
           </div>
 
@@ -514,6 +522,86 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
         <StatsViewComponent stats={stats} isDark={isDark} radiologists={radiologists} />
       )}
 
+      {/* Instructions Management View */}
+      {viewMode === 'instructions' && (
+        <div className="space-y-8 animate-in fade-in duration-700">
+          {/* Header */}
+          <div className={`p-10 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <div className="flex items-center justify-between mb-10">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-lg shadow-emerald-500/20">
+                  <Send className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black uppercase tracking-tighter leading-none">Repositorio de Indicaciones</h3>
+                  <p className="text-[10px] font-black opacity-40 uppercase tracking-widest mt-1">Gestiona las instrucciones pre-procedimiento para pacientes</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setEditingInstruction(null); setShowInstructionModal(true); }}
+                className="px-6 py-3 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all"
+              >
+                <Plus className="w-4 h-4" /> Nueva Indicación
+              </button>
+            </div>
+
+            {/* Instructions List */}
+            <div className="grid gap-4">
+              {instructions.length === 0 ? (
+                <div className="py-16 text-center opacity-30">
+                  <FileText className="w-16 h-16 mx-auto mb-4" />
+                  <p className="text-sm font-black uppercase tracking-widest">No hay indicaciones configuradas</p>
+                  <p className="text-xs mt-2">Presione "Nueva Indicación" para comenzar</p>
+                </div>
+              ) : (
+                instructions.map((inst) => (
+                  <div
+                    key={inst.id}
+                    className={`p-6 rounded-[32px] border transition-all hover:shadow-xl group ${isDark ? 'bg-slate-800/50 border-slate-800 hover:border-emerald-500/50' : 'bg-slate-50 border-slate-100 hover:border-emerald-500'}`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-grow min-w-0">
+                        <div className="flex items-center gap-3 mb-3">
+                          <h4 className="text-sm font-black uppercase tracking-tight">{inst.procedureType}</h4>
+                          {inst.modality && (
+                            <span className="px-2 py-1 bg-blue-600/10 text-blue-600 rounded-lg text-[8px] font-black uppercase">{inst.modality}</span>
+                          )}
+                          {inst.anticoagulantWarning && (
+                            <span className="px-2 py-1 bg-rose-500/10 text-rose-500 rounded-lg text-[8px] font-black uppercase flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" /> Anticoag.
+                            </span>
+                          )}
+                          {inst.fastingHours && (
+                            <span className="px-2 py-1 bg-amber-500/10 text-amber-600 rounded-lg text-[8px] font-black uppercase">
+                              Ayuno {inst.fastingHours}h
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-medium opacity-60 line-clamp-2">{inst.shortInstructions}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => { setEditingInstruction(inst); setShowInstructionModal(true); }}
+                          className="p-3 bg-blue-600/10 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={async () => { if (confirm('¿Eliminar esta indicación?')) await deleteInstruction(inst.id); }}
+                          className="p-3 bg-rose-500/10 text-rose-500 rounded-xl hover:bg-rose-600 hover:text-white transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Detail Panel */}
       {selectedProcedure && (
         <DetailPanel
@@ -550,6 +638,28 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
             }
             setShowNewModal(false);
             setEditingProcedure(null);
+          }}
+        />
+      )}
+
+      {/* Instruction Form Modal */}
+      {showInstructionModal && (
+        <InstructionFormModal
+          isDark={isDark}
+          instruction={editingInstruction}
+          catalog={catalog}
+          onClose={() => {
+            setShowInstructionModal(false);
+            setEditingInstruction(null);
+          }}
+          onSubmit={async (data) => {
+            if (editingInstruction) {
+              await updateInstruction(editingInstruction.id, data);
+            } else {
+              await addInstruction(data);
+            }
+            setShowInstructionModal(false);
+            setEditingInstruction(null);
           }}
         />
       )}
@@ -1320,6 +1430,170 @@ const ProcedureFormModal: React.FC<{
             >
               <Save className="w-4 h-4" />
               {procedure ? 'Guardar Cambios' : 'Crear Procedimiento'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Instruction Form Modal
+const InstructionFormModal: React.FC<{
+  isDark: boolean;
+  instruction: ProcedureInstructions | null;
+  catalog: any[];
+  onClose: () => void;
+  onSubmit: (data: Omit<ProcedureInstructions, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+}> = ({ isDark, instruction, catalog, onClose, onSubmit }) => {
+  const [procedureType, setProcedureType] = useState(instruction?.procedureType || '');
+  const [modality, setModality] = useState(instruction?.modality || '');
+  const [fullInstructions, setFullInstructions] = useState(instruction?.fullInstructions || '');
+  const [shortInstructions, setShortInstructions] = useState(instruction?.shortInstructions || '');
+  const [anticoagulantWarning, setAnticoagulantWarning] = useState(instruction?.anticoagulantWarning || false);
+  const [fastingHours, setFastingHours] = useState(instruction?.fastingHours?.toString() || '');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!procedureType.trim() || !fullInstructions.trim() || !shortInstructions.trim()) {
+      alert('Por favor complete todos los campos obligatorios.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await onSubmit({
+        procedureType: procedureType.trim(),
+        modality: modality as any || undefined,
+        fullInstructions: fullInstructions.trim(),
+        shortInstructions: shortInstructions.trim(),
+        anticoagulantWarning,
+        fastingHours: fastingHours ? parseInt(fastingHours) : undefined
+      });
+      onClose();
+    } catch (err) {
+      console.error('Error saving instruction:', err);
+      alert('Error al guardar la indicación.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[48px] ${isDark ? 'bg-slate-950 border border-slate-800' : 'bg-white shadow-2xl'}`}>
+        <div className="sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-10 py-8 flex items-center justify-between z-10 rounded-t-[48px]">
+          <div>
+            <h3 className="text-2xl font-black uppercase tracking-tighter">{instruction ? 'Editar Indicación' : 'Nueva Indicación'}</h3>
+            <p className="text-[10px] font-black opacity-40 uppercase tracking-widest mt-1">Instrucciones pre-procedimiento para pacientes</p>
+          </div>
+          <button onClick={onClose} className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all"><X className="w-6 h-6" /></button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-10 space-y-8">
+          {/* Procedure Type */}
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Tipo de Procedimiento *</label>
+            <input
+              type="text"
+              value={procedureType}
+              onChange={(e) => setProcedureType(e.target.value)}
+              placeholder="Ej: Biopsia Hepática"
+              list="procedure-types"
+              className={`w-full px-6 py-4 rounded-2xl border text-sm font-medium ${isDark ? 'bg-slate-900 border-slate-800 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 focus:border-emerald-500'} outline-none transition-colors`}
+              required
+            />
+            <datalist id="procedure-types">
+              {catalog.map(c => <option key={c.id} value={c.name} />)}
+            </datalist>
+          </div>
+
+          {/* Modality & Fasting */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Modalidad</label>
+              <select
+                value={modality}
+                onChange={(e) => setModality(e.target.value)}
+                className={`w-full px-6 py-4 rounded-2xl border text-sm font-medium ${isDark ? 'bg-slate-900 border-slate-800 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 focus:border-emerald-500'} outline-none transition-colors`}
+              >
+                <option value="">Sin especificar</option>
+                <option value="US">Ecografía (US)</option>
+                <option value="TAC">Tomografía (TAC)</option>
+                <option value="RM">Resonancia (RM)</option>
+                <option value="RX">Radiografía (RX)</option>
+                <option value="Fluoro">Fluoroscopía</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Horas de Ayuno</label>
+              <input
+                type="number"
+                value={fastingHours}
+                onChange={(e) => setFastingHours(e.target.value)}
+                placeholder="Ej: 8"
+                min="0"
+                max="24"
+                className={`w-full px-6 py-4 rounded-2xl border text-sm font-medium ${isDark ? 'bg-slate-900 border-slate-800 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 focus:border-emerald-500'} outline-none transition-colors`}
+              />
+            </div>
+          </div>
+
+          {/* Anticoagulant Warning */}
+          <div className={`p-6 rounded-3xl border flex items-center gap-4 cursor-pointer transition-all ${anticoagulantWarning ? 'bg-rose-500/10 border-rose-500/30' : isDark ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'}`} onClick={() => setAnticoagulantWarning(!anticoagulantWarning)}>
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${anticoagulantWarning ? 'bg-rose-500 text-white' : 'bg-slate-200 dark:bg-slate-800'}`}>
+              {anticoagulantWarning ? <Check className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5 opacity-40" />}
+            </div>
+            <div>
+              <p className="text-sm font-black uppercase tracking-tight">Advertencia de Anticoagulantes</p>
+              <p className="text-[10px] font-medium opacity-50">Marcar si este procedimiento requiere suspensión de anticoagulantes</p>
+            </div>
+          </div>
+
+          {/* Full Instructions */}
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Indicaciones Completas (Email) *</label>
+            <textarea
+              value={fullInstructions}
+              onChange={(e) => setFullInstructions(e.target.value)}
+              placeholder="Escriba las indicaciones detalladas que se enviarán por correo electrónico..."
+              rows={8}
+              className={`w-full px-6 py-4 rounded-2xl border text-sm font-medium ${isDark ? 'bg-slate-900 border-slate-800 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 focus:border-emerald-500'} outline-none transition-colors resize-none`}
+              required
+            />
+            <p className="text-[9px] font-bold opacity-30 mt-2">Puede usar {'{NOMBRE_PACIENTE}'}, {'{FECHA_PROCEDIMIENTO}'}, {'{PROCEDIMIENTO}'} como placeholders.</p>
+          </div>
+
+          {/* Short Instructions */}
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Indicaciones Cortas (WhatsApp) * <span className="opacity-40">({shortInstructions.length}/280 caracteres)</span></label>
+            <textarea
+              value={shortInstructions}
+              onChange={(e) => setShortInstructions(e.target.value.slice(0, 280))}
+              placeholder="Versión resumida para WhatsApp (máx 280 caracteres)..."
+              rows={3}
+              maxLength={280}
+              className={`w-full px-6 py-4 rounded-2xl border text-sm font-medium ${isDark ? 'bg-slate-900 border-slate-800 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 focus:border-emerald-500'} outline-none transition-colors resize-none`}
+              required
+            />
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-4 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-6 py-4 rounded-2xl border border-slate-200 dark:border-slate-800 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex-1 px-6 py-4 bg-emerald-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {isSubmitting ? <Clock className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {instruction ? 'Guardar Cambios' : 'Crear Indicación'}
             </button>
           </div>
         </form>
