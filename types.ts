@@ -275,3 +275,19 @@ export interface Message {
   folder: 'inbox' | 'sent' | 'trash';
   groupTag?: string;
 }
+
+// Shift & Operational Coverage Types
+export interface ShiftAssignment {
+  id: string;
+  doctorId: string;
+  doctorName: string;
+  institutionId: string;
+  institutionName: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  group: string;
+  createdAt: string;
+  status: 'Pending' | 'Confirmed' | 'Conflict';
+  notes?: string;
+}

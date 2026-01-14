@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import { useEmployees } from '../hooks/useEmployees';
 import { useInstitutions } from '../hooks/useInstitutions';
-import { UserSession } from '../types';
+import { useShifts } from '../hooks/useShifts';
+import { UserSession, ShiftAssignment } from '../types';
 import { addDocument, getDocuments, setDocument } from '../services/firestoreService';
 
 // Estructura de las Reglas de Oro con soporte para Grupos
@@ -48,9 +49,11 @@ interface Props {
 const ShiftsModule: React.FC<Props> = ({ isDark, currentUser }) => {
   const { employees } = useEmployees();
   const { institutions } = useInstitutions();
+  const { shifts, addShift, deleteShift, loading: loadingShifts } = useShifts();
   const doctors = useMemo(() => employees.filter(e => e.role === 'Médico'), [employees]);
 
   const [viewMode, setViewMode] = useState<'chat' | 'timeline' | 'config'>('timeline');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [rules, setRules] = useState<GoldenRules>(DEFAULT_RULES);
   const [loadingRules, setLoadingRules] = useState(true);
 
@@ -89,7 +92,6 @@ const ShiftsModule: React.FC<Props> = ({ isDark, currentUser }) => {
 
   // Estado para gestión de grupos
   const [newGroupName, setNewGroupName] = useState('');
-  // ... (rest of the component state)
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
 
   // Modal para gestionar restricciones de un médico específico
@@ -106,7 +108,7 @@ const ShiftsModule: React.FC<Props> = ({ isDark, currentUser }) => {
     doctorName: '',
     institutionId: '',
     institutionName: '',
-    date: '',
+    date: new Date().toISOString().split('T')[0],
     startTime: rules.businessStart,
     endTime: '12:00',
     group: '1'
@@ -181,6 +183,35 @@ const ShiftsModule: React.FC<Props> = ({ isDark, currentUser }) => {
     } finally {
       setIsTyping(false);
       setSearchTerm('');
+    }
+  };
+
+  const handleFinalize = async () => {
+    try {
+      await addShift({
+        doctorId: draft.doctorId,
+        doctorName: draft.doctorName,
+        institutionId: draft.institutionId,
+        institutionName: draft.institutionName,
+        date: draft.date,
+        startTime: draft.startTime,
+        endTime: draft.endTime,
+        group: draft.group
+      });
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Asignación grabada exitosamente en el registro central.' }]);
+      setStep('none');
+      setDraft({
+        ...draft,
+        doctorId: '',
+        doctorName: '',
+        institutionId: '',
+        institutionName: '',
+        startTime: rules.businessStart,
+        endTime: '12:00'
+      });
+    } catch (err) {
+      console.error('Error finalizando asignación:', err);
+      alert('Error al guardar la asignación.');
     }
   };
 
@@ -498,8 +529,13 @@ const ShiftsModule: React.FC<Props> = ({ isDark, currentUser }) => {
                 )}
 
                 {step === 'confirm' && (
-                  <div className="text-center">
-                    <button onClick={() => { setMessages(prev => [...prev, { role: 'assistant', content: 'Asignación grabada exitosamente.' }]); setStep('none'); }} className="px-12 py-5 bg-emerald-600 text-white rounded-full font-black text-xs uppercase tracking-widest shadow-xl">Finalizar Registro</button>
+                  <div className="text-center animate-in zoom-in-95">
+                    <button
+                      onClick={handleFinalize}
+                      className="px-12 py-5 bg-emerald-600 text-white rounded-full font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-500/20 hover:scale-105 transition-all"
+                    >
+                      Finalizar Registro
+                    </button>
                     <button onClick={() => setStep('doctor')} className="block mx-auto mt-4 text-[9px] font-black uppercase opacity-40 hover:underline">Reiniciar</button>
                   </div>
                 )}
@@ -510,10 +546,143 @@ const ShiftsModule: React.FC<Props> = ({ isDark, currentUser }) => {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-950/20">
-              <div className="flex-grow flex flex-col items-center justify-center opacity-20 p-20 text-center">
-                <MapIcon className="w-24 h-24 mb-6" />
-                <h3 className="text-2xl font-black uppercase tracking-widest">Vista de Cobertura</h3>
+            <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-950/20 overflow-hidden">
+              {/* Header de la Timeline: Controles de Fecha */}
+              <div className="p-6 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
+                <div className="flex items-center gap-6">
+                  <div className="flex items-center gap-3">
+                    <Calendar className="w-5 h-5 text-indigo-600" />
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={e => setSelectedDate(e.target.value)}
+                      className="bg-transparent font-black text-sm uppercase tracking-tighter outline-none cursor-pointer"
+                    />
+                  </div>
+                  <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50" />
+                      <span className="text-[9px] font-black uppercase opacity-40">Cubierto</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50 animate-pulse" />
+                      <span className="text-[9px] font-black uppercase opacity-40">Vacío Operativo</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button onClick={() => {
+                    const d = new Date(selectedDate);
+                    d.setDate(d.getDate() - 1);
+                    setSelectedDate(d.toISOString().split('T')[0]);
+                  }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"><ChevronRight className="w-4 h-4 rotate-180" /></button>
+                  <button onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-[9px] font-black uppercase">HOY</button>
+                  <button onClick={() => {
+                    const d = new Date(selectedDate);
+                    d.setDate(d.getDate() + 1);
+                    setSelectedDate(d.toISOString().split('T')[0]);
+                  }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"><ChevronRight className="w-4 h-4" /></button>
+                </div>
+              </div>
+
+              {/* Contenido de la Timeline */}
+              <div className="flex-grow overflow-auto custom-scrollbar p-6">
+                <div className="min-w-[800px]">
+                  {/* Horas */}
+                  <div className="grid grid-cols-[200px_1fr] border-b border-slate-100 dark:border-slate-800 mb-4 pb-2">
+                    <div className="text-[9px] font-black uppercase opacity-30">Instituciones / Horas</div>
+                    <div className="flex justify-between px-4">
+                      {Array.from({ length: 13 }).map((_, i) => {
+                        const hour = (8 + i).toString().padStart(2, '0') + ':00';
+                        return <span key={i} className="text-[9px] font-black opacity-30">{hour}</span>;
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Filas por Institución */}
+                  <div className="space-y-4">
+                    {institutions.map(inst => {
+                      const instShifts = shifts.filter(s => s.institutionId === inst.id && s.date === selectedDate);
+
+                      return (
+                        <div key={inst.id} className="grid grid-cols-[200px_1fr] items-center group">
+                          <div className="pr-4">
+                            <h4 className="text-[10px] font-black uppercase tracking-tight truncate group-hover:text-indigo-600 transition-colors">{inst.name}</h4>
+                            <p className="text-[8px] font-bold opacity-30 uppercase">{inst.abbreviation}</p>
+                          </div>
+
+                          <div className="relative h-14 bg-slate-100 dark:bg-slate-800/40 rounded-2xl border border-slate-200/50 dark:border-slate-800 overflow-hidden shadow-inner">
+                            {/* Grid de fondo */}
+                            <div className="absolute inset-0 flex justify-between px-4 pointer-events-none opacity-5">
+                              {Array.from({ length: 13 }).map((_, i) => (
+                                <div key={i} className="w-px h-full bg-slate-400" />
+                              ))}
+                            </div>
+
+                            {/* Detección de Gaps (Simplificada: si no hay turnos, todo es gap) */}
+                            {instShifts.length === 0 && (
+                              <div className="absolute inset-0 bg-rose-500/5 flex items-center justify-center">
+                                <span className="text-[8px] font-black uppercase text-rose-500/40 tracking-[0.2em] flex items-center gap-2">
+                                  <AlertTriangle className="w-3 h-3" /> Sin Cobertura Registrada
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Render de Turnos */}
+                            {instShifts.map(shift => {
+                              // Calcular posición X y Ancho porcentual
+                              const startH = parseInt(shift.startTime.split(':')[0]);
+                              const startM = parseInt(shift.startTime.split(':')[1]);
+                              const endH = parseInt(shift.endTime.split(':')[0]);
+                              const endM = parseInt(shift.endTime.split(':')[1]);
+
+                              const totalStartMin = (startH * 60) + startM;
+                              const totalEndMin = (endH * 60) + endM;
+                              const bizStartMin = (8 * 60); // 08:00
+                              const bizEndMin = (20 * 60); // 20:00
+                              const bizDuration = bizEndMin - bizStartMin;
+
+                              const leftPos = ((totalStartMin - bizStartMin) / bizDuration) * 100;
+                              const width = ((totalEndMin - totalStartMin) / bizDuration) * 100;
+
+                              const isRestricted = rules.restrictions[shift.doctorId]?.includes(inst.id);
+
+                              return (
+                                <div
+                                  key={shift.id}
+                                  style={{ left: `${leftPos}%`, width: `${width}%` }}
+                                  onClick={() => {
+                                    if (confirm(`¿Desea eliminar la asignación del Dr. ${shift.doctorName}?`)) {
+                                      deleteShift(shift.id);
+                                    }
+                                  }}
+                                  className={`absolute top-1 bottom-1 p-2 rounded-xl border transition-all hover:scale-[1.02] cursor-pointer shadow-lg z-10
+                                            ${isRestricted
+                                      ? 'bg-rose-600 border-rose-400 text-white animate-pulse'
+                                      : 'bg-indigo-600 border-indigo-400 text-white'}`}
+                                >
+                                  <div className="flex h-full items-center justify-between">
+                                    <div className="overflow-hidden">
+                                      <p className="text-[9px] font-black uppercase leading-none truncate">{shift.doctorName.split(' ')[1] || shift.doctorName}</p>
+                                      <p className="text-[7px] font-bold opacity-70 uppercase tracking-widest mt-1">
+                                        {shift.startTime}-{shift.endTime}
+                                      </p>
+                                    </div>
+                                    <div className="flex-shrink-0">
+                                      {isRestricted ? <ShieldAlert className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4 opacity-40 text-emerald-200" />}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           )}
