@@ -5,6 +5,7 @@ import {
     updateDoc,
     deleteDoc,
     doc,
+    setDoc,
     query,
     orderBy,
     Timestamp,
@@ -88,6 +89,29 @@ export async function updateDocument<T extends FirestoreDocument>(
     } catch (error) {
         console.error(`Error updating document ${documentId} in ${collectionName}:`, error);
         throw new Error(`Failed to update document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+}
+
+/**
+ * Set a document with a specific ID (Upsert)
+ */
+export async function setDocument<T extends FirestoreDocument>(
+    collectionName: string,
+    documentId: string,
+    data: T
+): Promise<void> {
+    try {
+        const docRef = doc(firestore, collectionName, documentId);
+        const timestamp = new Date().toISOString();
+        const { id, ...dataToSet } = data; // Avoid setting id field manually if it's already document ID
+        await setDoc(docRef, {
+            ...dataToSet,
+            updatedAt: timestamp,
+            createdAt: data.createdAt || timestamp,
+        }, { merge: true });
+    } catch (error) {
+        console.error(`Error setting document ${documentId} in ${collectionName}:`, error);
+        throw new Error(`Failed to set document: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
 }
 
