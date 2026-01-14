@@ -291,3 +291,16 @@ export interface ShiftAssignment {
   status: 'Pending' | 'Confirmed' | 'Conflict';
   notes?: string;
 }
+
+// Procedure Instructions Repository Types
+export interface ProcedureInstructions {
+  id: string;
+  procedureType: string;
+  modality?: ProcedureModality;
+  fullInstructions: string;    // Extended version for Email
+  shortInstructions: string;   // Short version for WhatsApp (~280 chars)
+  anticoagulantWarning: boolean;
+  fastingHours?: number;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -3,12 +3,15 @@ import {
   Download, Edit2, Eye, FileText, Filter, Info, Mail, Phone, Plus,
   Printer, Search, Trash2, Upload, User, X, Check, Clock, Building2,
   AlertCircle, FileSpreadsheet, Save, Stethoscope, MapPin, Activity,
-  BarChart3, Users, DollarSign, TrendingUp, Bell, FileUp, CheckCircle2
+  BarChart3, Users, DollarSign, TrendingUp, Bell, FileUp, CheckCircle2, Sparkles,
+  MessageCircle, Copy, Send
 } from 'lucide-react';
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { GoogleGenAI } from "@google/genai";
 import { useEmployees } from '../hooks/useEmployees';
 import { useProcedures } from '../hooks/useProcedures';
-import { ProcedureStatus, UserSession, ProcedureEntry, Employee } from '../types';
+import { useInstructions } from '../hooks/useInstructions';
+import { ProcedureStatus, UserSession, ProcedureEntry, Employee, ProcedureInstructions } from '../types';
 
 interface Props {
   isDark: boolean;
@@ -22,6 +25,7 @@ type ViewMode = 'table' | 'calendar' | 'stats';
 const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
   const { employees } = useEmployees();
   const { procedures, catalog, addProcedure, updateProcedure, deleteProcedure, toggleRequirement } = useProcedures();
+  const { instructions, getInstructionForProcedure } = useInstructions();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -522,6 +526,7 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
             if (updated) setSelectedProcedure(updated);
           }}
           isDark={isDark}
+          instructions={getInstructionForProcedure(selectedProcedure.procedureType)}
         />
       )}
 
@@ -670,54 +675,89 @@ const StatsViewComponent: React.FC<{
   radiologists: Employee[];
 }> = ({ stats, isDark }) => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 animate-in fade-in duration-700">
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard label="Total Procedimientos" value={stats.total} icon={<Activity className="w-6 h-6" />} color="blue" />
         <KPICard label="Pendientes Docs" value={stats.pending} icon={<FileText className="w-6 h-6" />} color="amber" />
         <KPICard label="Completados" value={stats.completed} icon={<CheckCircle2 className="w-6 h-6" />} color="green" />
-        <KPICard label="Facturación Total" value={`$${stats.totalValue.toLocaleString('es-CL')}`} icon={<DollarSign className="w-6 h-6" />} color="indigo" />
+        <KPICard label="Facturación Estimada" value={`$${stats.totalValue.toLocaleString('es-CL')}`} icon={<DollarSign className="w-6 h-6" />} color="indigo" />
       </div>
 
-      {/* Charts */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className={`p-6 rounded-lg border ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
-          <h3 className="text-lg font-bold mb-4">Por Estado</h3>
-          <div className="space-y-3">
-            {Object.entries(stats.byStatus).map(([status, count]: [string, any]) => (
-              <div key={status} className="flex items-center gap-3">
-                <StatusBadge status={status as ProcedureStatus} />
-                <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-4 overflow-hidden">
-                  <div className="bg-blue-600 h-full" style={{ width: `${(count / stats.total) * 100}%` }} />
-                </div>
-                <span className="text-sm font-medium w-12 text-right">{count}</span>
+      {/* Charts & Distribution */}
+      <div className="grid lg:grid-cols-12 gap-8">
+        {/* Status Distribution */}
+        <div className={`lg:col-span-12 p-10 rounded-[48px] border overflow-hidden ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+          <div className="flex items-center gap-4 mb-10">
+            <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-lg shadow-blue-500/20">
+              <TrendingUp className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black uppercase tracking-tighter leading-none">Distribución Operativa</h3>
+              <p className="text-[10px] font-black opacity-40 uppercase tracking-widest mt-1">Carga de trabajo por estado y médico</p>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-12">
+            <div>
+              <h4 className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-6">Estado de Pacientes</h4>
+              <div className="space-y-6">
+                {Object.entries(stats.byStatus).map(([status, count]: [string, any]) => (
+                  <div key={status} className="group">
+                    <div className="flex justify-between items-end mb-2">
+                      <StatusBadge status={status as ProcedureStatus} />
+                      <span className="text-xs font-black opacity-100">{count} <span className="opacity-30">({((count / stats.total) * 100).toFixed(0)}%)</span></span>
+                    </div>
+                    <div className="bg-slate-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden shadow-inner">
+                      <div
+                        className="bg-blue-600 h-full shadow-lg shadow-blue-500/30 transition-all duration-1000 ease-out group-hover:brightness-110"
+                        style={{ width: `${(count / stats.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+
+            <div>
+              <h4 className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-6">Top Médicos (Productividad)</h4>
+              <div className="space-y-5">
+                {Object.entries(stats.byDoctor).slice(0, 5).map(([name, data]: [string, any]) => (
+                  <div key={name} className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase tracking-tight truncate w-32">{name}</span>
+                      <span className="text-[10px] font-black text-indigo-600 bg-indigo-600/10 px-3 py-1 rounded-full border border-indigo-600/20">${data.value.toLocaleString('es-CL')}</span>
+                    </div>
+                    <div className="bg-slate-100 dark:bg-slate-800 rounded-full h-2 overflow-hidden shadow-inner">
+                      <div
+                        className="bg-indigo-600 h-full shadow-lg shadow-indigo-500/30 transition-all duration-1000 ease-out"
+                        style={{ width: `${(data.count / stats.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className={`p-6 rounded-lg border ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
-          <h3 className="text-lg font-bold mb-4">Por Médico</h3>
-          <div className="space-y-3">
-            {Object.entries(stats.byDoctor).slice(0, 5).map(([name, data]: [string, any]) => (
-              <div key={name} className="flex items-center gap-3">
-                <span className="text-sm w-32 truncate">{name}</span>
-                <div className="flex-1 bg-slate-100 dark:bg-slate-800 rounded-full h-4 overflow-hidden">
-                  <div className="bg-indigo-600 h-full" style={{ width: `${(data.count / stats.total) * 100}%` }} />
-                </div>
-                <span className="text-sm font-medium w-20 text-right">${data.value.toLocaleString('es-CL')}</span>
-              </div>
-            ))}
+        {/* Clinical Centers */}
+        <div className={`lg:col-span-12 p-10 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+          <div className="flex items-center gap-4 mb-10">
+            <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-lg shadow-emerald-500/20">
+              <Building2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-xl font-black uppercase tracking-tighter leading-none">Cobertura por Sede</h3>
+              <p className="text-[10px] font-black opacity-40 uppercase tracking-widest mt-1">Presencia clínica y volumen por centro</p>
+            </div>
           </div>
-        </div>
 
-        <div className={`p-6 rounded-lg border lg:col-span-2 ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
-          <h3 className="text-lg font-bold mb-4">Por Sede Clínica</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {Object.entries(stats.byCenter).map(([center, count]: [string, any]) => (
-              <div key={center} className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg text-center">
-                <div className="text-2xl font-bold text-blue-600">{count}</div>
-                <div className="text-sm text-slate-500 mt-1">{center}</div>
+              <div key={center} className="group p-6 bg-slate-50 dark:bg-slate-800/50 rounded-[32px] border border-slate-100 dark:border-slate-800 text-center transition-all hover:scale-105 hover:shadow-xl">
+                <div className="text-3xl font-black text-blue-600 mb-1">{count}</div>
+                <div className="text-[9px] font-black uppercase tracking-tighter text-slate-500 group-hover:text-blue-500 transition-colors">{center}</div>
               </div>
             ))}
           </div>
@@ -729,16 +769,16 @@ const StatsViewComponent: React.FC<{
 
 const KPICard: React.FC<{ label: string; value: string | number; icon: React.ReactNode; color: string }> = ({ label, value, icon, color }) => {
   const colors: Record<string, string> = {
-    blue: 'bg-blue-50 text-blue-600 dark:bg-blue-900/20',
-    amber: 'bg-amber-50 text-amber-600 dark:bg-amber-900/20',
-    green: 'bg-green-50 text-green-600 dark:bg-green-900/20',
-    indigo: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20'
+    blue: 'bg-blue-600/10 text-blue-600 border-blue-600/20',
+    amber: 'bg-amber-600/10 text-amber-600 border-amber-600/20',
+    green: 'bg-emerald-600/10 text-emerald-600 border-emerald-600/20',
+    indigo: 'bg-indigo-600/10 text-indigo-600 border-indigo-600/20'
   };
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
-      <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${colors[color]}`}>{icon}</div>
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className="text-2xl font-bold mt-1">{value}</p>
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm transition-all hover:shadow-2xl hover:scale-105 group">
+      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 border transition-transform group-hover:rotate-12 ${colors[color]}`}>{icon}</div>
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">{label}</p>
+      <p className="text-3xl font-black tracking-tighter">{value}</p>
     </div>
   );
 };
@@ -750,78 +790,313 @@ const DetailPanel: React.FC<{
   onClose: () => void;
   onToggleRequirement: (reqId: string) => void;
   isDark: boolean;
-}> = ({ procedure, doctor, onClose, onToggleRequirement, isDark }) => {
+  instructions?: ProcedureInstructions;
+}> = ({ procedure, doctor, onClose, onToggleRequirement, isDark, instructions }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Helper to normalize phone number for WhatsApp (remove spaces, dashes, + prefix)
+  const normalizePhone = (phone: string): string => {
+    return phone.replace(/[\s\-\+\(\)]/g, '').replace(/^0/, '56');
+  };
+
+  // Helper to personalize instructions with patient data
+  const personalizeInstructions = (text: string): string => {
+    return text
+      .replace(/{NOMBRE_PACIENTE}/g, procedure.patientName)
+      .replace(/{FECHA_PROCEDIMIENTO}/g, procedure.scheduledDate ? new Date(procedure.scheduledDate).toLocaleDateString('es-CL') : 'Por confirmar')
+      .replace(/{PROCEDIMIENTO}/g, procedure.procedureType);
+  };
+
+  const handleSendEmail = () => {
+    if (!instructions) return;
+    const subject = `Indicaciones para su ${procedure.procedureType} - AMIS`;
+    const body = personalizeInstructions(instructions.fullInstructions);
+    window.open(`mailto:${procedure.patientEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`);
+  };
+
+  const handleSendWhatsApp = () => {
+    if (!instructions) return;
+    const phone = normalizePhone(procedure.patientPhone);
+    const message = personalizeInstructions(instructions.shortInstructions);
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const handleCopyInstructions = async () => {
+    if (!instructions) return;
+    try {
+      await navigator.clipboard.writeText(personalizeInstructions(instructions.fullInstructions));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const analyzeRisk = async () => {
+    setIsAnalyzing(true);
+    try {
+      const genAI = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+
+      const prompt = `Analiza el riesgo clínico del siguiente procedimiento:
+        PACIENTE: ${procedure.patientName}
+        PROCEDIMIENTO: ${procedure.procedureType}
+        MODALIDAD: ${procedure.modality}
+        ANTICOAGULANTES: ${procedure.takesAnticoagulants ? 'SÍ' : 'NO'}
+        DOCUMENTOS COMPLETADOS: ${procedure.requirements?.filter(r => r.isCompleted).map(r => r.name).join(', ') || 'Ninguno'}
+        DOCUMENTOS PENDIENTES: ${procedure.requirements?.filter(r => !r.isCompleted).map(r => r.name).join(', ') || 'Ninguno'}
+        
+        Tu tarea es:
+        1. Evaluar si es SEGURO proceder con la información actual.
+        2. Si toma anticoagulantes, dar advertencias específicas.
+        3. Validar si los documentos faltantes son CRÍTICOS para este tipo de intervención.
+        4. Dar una recomendación final concisa (Máximo 3 párrafos).
+        Usa un tono profesional médico de AMIS.`;
+
+      const result = await model.generateContent(prompt);
+      setAiAnalysis(result.response.text());
+    } catch (err) {
+      console.error('Error in AI Analysis:', err);
+      setAiAnalysis("Error al conectar con el Motor de Inteligencia Clínica.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex justify-end print:hidden" onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-2xl h-full overflow-y-auto ${isDark ? 'bg-slate-900' : 'bg-white'} shadow-2xl`}>
-        <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between z-10">
-          <h3 className="text-lg font-bold">Detalles del Procedimiento</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><X className="w-5 h-5" /></button>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-end animate-in fade-in duration-300 print:hidden" onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-3xl h-full overflow-y-auto ${isDark ? 'bg-slate-950 border-l border-slate-800' : 'bg-white shadow-2xl'} shadow-2xl relative`}>
+        <div className="sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-8 py-6 flex items-center justify-between z-10">
+          <div>
+            <h3 className="text-2xl font-black uppercase tracking-tighter">Expediente Clínico</h3>
+            <p className="text-[10px] font-black opacity-40 uppercase tracking-widest mt-1">Ref: {procedure.id.slice(0, 8)}</p>
+          </div>
+          <button onClick={onClose} className="p-3 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-2xl transition-all"><X className="w-6 h-6" /></button>
         </div>
 
-        <div className="p-6 space-y-6">
-          {/* Patient Info */}
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
-            <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 flex items-center gap-2"><User className="w-4 h-4" /> Paciente</h4>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><p className="text-slate-500">Nombre</p><p className="font-medium">{procedure.patientName}</p></div>
-              <div><p className="text-slate-500">RUT</p><p className="font-mono font-medium">{procedure.patientRut}</p></div>
-              <div><p className="text-slate-500">Teléfono</p><p className="font-medium flex items-center gap-1"><Phone className="w-3 h-3" />{procedure.patientPhone}</p></div>
-              <div><p className="text-slate-500">Email</p><p className="font-medium flex items-center gap-1"><Mail className="w-3 h-3" />{procedure.patientEmail}</p></div>
-              {procedure.takesAnticoagulants && (
-                <div className="col-span-2">
-                  <div className="flex items-center gap-2 text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded">
-                    <AlertTriangle className="w-4 h-4" /><span className="font-medium">Toma anticoagulantes</span>
+        <div className="p-10 space-y-10">
+          {/* AI Analysis Section */}
+          <div className={`p-8 rounded-[48px] border transition-all ${isDark ? 'bg-indigo-950/20 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'}`}>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                  <Sparkles className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-black uppercase tracking-tighter">Motor de Riesgo IA</h4>
+                  <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-1">Análisis clínico asistido por Gemini</p>
+                </div>
+              </div>
+              <button
+                onClick={analyzeRisk}
+                disabled={isAnalyzing}
+                className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-indigo-500/20
+                  ${isAnalyzing ? 'bg-slate-200 opacity-50' : 'bg-indigo-600 text-white hover:scale-105 active:scale-95'}`}
+              >
+                {isAnalyzing ? <Clock className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
+                {isAnalyzing ? 'Analizando...' : 'Consultar Riesgo IA'}
+              </button>
+            </div>
+
+            {aiAnalysis ? (
+              <div className="animate-in slide-in-from-top-4 duration-500">
+                <div className={`prose prose-sm max-w-none ${isDark ? 'prose-invert' : ''}`}>
+                  <div className="p-6 bg-white/50 dark:bg-slate-900/50 rounded-3xl border border-indigo-500/10 text-xs leading-relaxed font-medium">
+                    {aiAnalysis.split('\n').map((line, i) => <p key={i} className="mb-2">{line}</p>)}
                   </div>
+                </div>
+              </div>
+            ) : (
+              <div className="py-4 text-center">
+                <p className="text-[11px] font-bold opacity-30 uppercase tracking-widest">Presione el botón para iniciar la evaluación pre-operatoria</p>
+              </div>
+            )}
+          </div>
+
+          {/* Patient Instructions Section */}
+          {instructions ? (
+            <div className={`p-8 rounded-[48px] border transition-all ${isDark ? 'bg-emerald-950/20 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100'}`}>
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/30">
+                    <Send className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-black uppercase tracking-tighter">Indicaciones al Paciente</h4>
+                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mt-1">{instructions.procedureType}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Instructions Preview */}
+              <div className="mb-6 p-6 bg-white/50 dark:bg-slate-900/50 rounded-3xl border border-emerald-500/10">
+                <p className="text-[11px] font-black uppercase tracking-widest opacity-40 mb-3">Vista Previa (Versión Corta)</p>
+                <p className="text-xs leading-relaxed font-medium">{personalizeInstructions(instructions.shortInstructions)}</p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={handleSendEmail}
+                  className="flex-1 min-w-[140px] px-6 py-4 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-blue-500/20 hover:scale-105 active:scale-95 transition-all"
+                >
+                  <Mail className="w-4 h-4" /> Enviar por Email
+                </button>
+                <button
+                  onClick={handleSendWhatsApp}
+                  className="flex-1 min-w-[140px] px-6 py-4 bg-green-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-green-500/20 hover:scale-105 active:scale-95 transition-all"
+                >
+                  <MessageCircle className="w-4 h-4" /> WhatsApp
+                </button>
+                <button
+                  onClick={handleCopyInstructions}
+                  className={`flex-1 min-w-[140px] px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all border
+                    ${copied
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xl shadow-emerald-500/20'
+                      : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                >
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copied ? '¡Copiado!' : 'Copiar Texto'}
+                </button>
+              </div>
+
+              {instructions.anticoagulantWarning && procedure.takesAnticoagulants && (
+                <div className="mt-6 p-4 bg-amber-500/10 border border-amber-500/20 text-amber-600 rounded-2xl flex items-center gap-4">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                  <p className="text-[10px] font-black uppercase tracking-widest">Las indicaciones incluyen advertencia sobre anticoagulantes</p>
                 </div>
               )}
             </div>
-          </div>
+          ) : (
+            <div className={`p-8 rounded-[48px] border transition-all ${isDark ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+              <div className="flex items-center gap-4 opacity-40">
+                <div className="w-12 h-12 bg-slate-200 dark:bg-slate-800 rounded-2xl flex items-center justify-center">
+                  <Send className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-black uppercase tracking-tighter">Indicaciones al Paciente</h4>
+                  <p className="text-[10px] font-black uppercase tracking-widest mt-1">No hay indicaciones configuradas para: {procedure.procedureType}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
-          {/* Procedure Info */}
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
-            <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 flex items-center gap-2"><Stethoscope className="w-4 h-4" /> Procedimiento</h4>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><p className="text-slate-500">Procedimiento</p><p className="font-medium">{procedure.procedureType}</p></div>
-              <div><p className="text-slate-500">Modalidad</p><p className="font-medium">{procedure.modality}</p></div>
-              <div><p className="text-slate-500">Fecha</p><p className="font-medium">{procedure.scheduledDate ? new Date(procedure.scheduledDate).toLocaleDateString('es-CL') : 'Sin programar'}</p></div>
-              <div><p className="text-slate-500">Estado</p><StatusBadge status={procedure.status} /></div>
-              <div><p className="text-slate-500">Médico</p><p className="font-medium">{doctor ? `Dr. ${doctor.lastName}` : 'Sin asignar'}</p></div>
-              <div><p className="text-slate-500">Sede</p><p className="font-medium">{procedure.clinicalCenter || 'Sin sede'}</p></div>
-              <div><p className="text-slate-500">Valor</p><p className="font-medium">${procedure.value.toLocaleString('es-CL')}</p></div>
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Patient Info */}
+            <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 rounded-[40px] p-8 shadow-inner">
+              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2"><User className="w-4 h-4" /> Datos del Paciente</h4>
+              <div className="space-y-4">
+                <div className="group">
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 group-hover:text-blue-500 transition-colors">Nombre Completo</p>
+                  <p className="text-sm font-black uppercase">{procedure.patientName}</p>
+                </div>
+                <div className="group">
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 group-hover:text-blue-500 transition-colors">RUT Identificación</p>
+                  <p className="text-sm font-mono font-black">{procedure.patientRut}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Contacto</p>
+                    <p className="text-xs font-black flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 opacity-40" />{procedure.patientPhone}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Correo</p>
+                    <p className="text-xs font-black truncate flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 opacity-40" />{procedure.patientEmail}</p>
+                  </div>
+                </div>
+                {procedure.takesAnticoagulants && (
+                  <div className="mt-4 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-3xl flex items-center gap-4 animate-pulse">
+                    <AlertTriangle className="w-6 h-6 flex-shrink-0" />
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest">Alerta de Riesgo</p>
+                      <p className="text-[11px] font-black">PACIENTE TOMA ANTICOAGULANTES</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Procedure Info */}
+            <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 rounded-[40px] p-8 shadow-inner">
+              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6 flex items-center gap-2"><Stethoscope className="w-4 h-4" /> Detalle Intervención</h4>
+              <div className="space-y-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Operación</p>
+                    <p className="text-sm font-black uppercase">{procedure.procedureType}</p>
+                  </div>
+                  <StatusBadge status={procedure.status} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Modalidad</p>
+                    <p className="text-xs font-black uppercase tracking-tighter">{procedure.modality}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Fecha Programada</p>
+                    <p className="text-xs font-black uppercase">{procedure.scheduledDate ? new Date(procedure.scheduledDate).toLocaleDateString('es-CL') : 'PENDIENTE'}</p>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Equipo Médico Asignado</p>
+                  <p className="text-[11px] font-black uppercase tracking-tight">{doctor ? `Dr. ${doctor.lastName}, ${doctor.firstName}` : 'SIN ASIGNAR'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Sede Clínica</p>
+                  <p className="text-[11px] font-black uppercase tracking-tight">{procedure.clinicalCenter || 'SIN SEDE ASIGNADA'}</p>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Documents Checklist */}
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
-            <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 flex items-center gap-2">
-              <FileText className="w-4 h-4" /> Documentación Requerida
-              <span className="ml-auto text-xs font-normal">
-                {procedure.requirements?.filter(r => r.isCompleted).length || 0} / {procedure.requirements?.length || 0} completados
-              </span>
-            </h4>
-            <div className="space-y-2">
+          <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 rounded-[48px] p-10 shadow-inner">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+                  <FileText className="w-6 h-6 text-slate-400" />
+                </div>
+                <div>
+                  <h4 className="text-xl font-black uppercase tracking-tighter">Protocolo de Documentación</h4>
+                  <p className="text-[10px] font-black opacity-40 uppercase tracking-widest mt-1">Cumplimiento: {procedure.requirements?.filter(r => r.isCompleted).length || 0} de {procedure.requirements?.length || 0}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-3">
               {(!procedure.requirements || procedure.requirements.length === 0) ? (
-                <p className="text-sm text-slate-500 text-center py-4">Sin documentos requeridos</p>
+                <div className="py-12 text-center opacity-20">
+                  <FileText className="w-12 h-12 mx-auto mb-4" />
+                  <p className="text-xs font-black uppercase tracking-widest">Sin documentos requeridos</p>
+                </div>
               ) : (
                 procedure.requirements.map((req) => (
-                  <div key={req.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => onToggleRequirement(req.id)} className={`w-6 h-6 rounded border-2 flex items-center justify-center ${req.isCompleted ? 'bg-green-600 border-green-600 text-white' : 'border-slate-300'}`}>
-                        {req.isCompleted && <Check className="w-4 h-4" />}
+                  <div key={req.id} className={`flex items-center justify-between p-5 rounded-[24px] border transition-all ${req.isCompleted ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:shadow-lg'}`}>
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => onToggleRequirement(req.id)}
+                        className={`w-10 h-10 rounded-2xl border-2 flex items-center justify-center transition-all ${req.isCompleted ? 'bg-emerald-600 border-emerald-600 text-white shadow-lg shadow-emerald-500/30 rotate-0' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-500 rotate-45 hover:rotate-0'}`}
+                      >
+                        {req.isCompleted ? <Check className="w-6 h-6" /> : <Plus className="w-5 h-5 text-slate-300" />}
                       </button>
-                      <span className={`text-sm ${req.isCompleted ? 'line-through text-slate-400' : ''}`}>{req.name}</span>
+                      <div>
+                        <span className={`text-[11px] font-black uppercase tracking-tight ${req.isCompleted ? 'text-slate-400' : ''}`}>{req.name}</span>
+                        <p className={`text-[8px] font-black uppercase tracking-widest mt-0.5 ${req.isCompleted ? 'text-emerald-500' : 'text-slate-500 opacity-40'}`}>
+                          {req.isCompleted ? 'Verificado' : 'Pendiente Carga'}
+                        </p>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       {req.fileUrl ? (
-                        <a href={req.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 text-sm hover:underline flex items-center gap-1">
-                          <Eye className="w-4 h-4" /> Ver
+                        <a href={req.fileUrl} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-600/10 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all">
+                          <Eye className="w-5 h-5" />
                         </a>
                       ) : (
-                        <button className="text-sm text-slate-500 hover:text-blue-600 flex items-center gap-1">
-                          <Upload className="w-4 h-4" /> Subir
+                        <button className="p-3 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all group">
+                          <Upload className="w-5 h-5 group-hover:scale-110" />
                         </button>
                       )}
                     </div>
