@@ -1462,18 +1462,21 @@ const InstructionFormModal: React.FC<{
     }
     setIsSubmitting(true);
     try {
+      const hours = fastingHours ? parseInt(fastingHours) : undefined;
+
       await onSubmit({
         procedureType: procedureType.trim(),
         modality: modality as any || undefined,
         fullInstructions: fullInstructions.trim(),
         shortInstructions: shortInstructions.trim(),
         anticoagulantWarning,
-        fastingHours: fastingHours ? parseInt(fastingHours) : undefined
+        fastingHours: (hours !== null && !isNaN(hours as number)) ? hours : undefined
       });
       onClose();
     } catch (err) {
       console.error('Error saving instruction:', err);
-      alert('Error al guardar la indicación.');
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      alert(`Error al guardar la indicación: ${errorMessage}`);
     } finally {
       setIsSubmitting(false);
     }
