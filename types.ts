@@ -296,6 +296,7 @@ export interface ShiftAssignment {
 export interface ProcedureInstructions {
   id: string;
   procedureType: string;
+  clinicalCenter?: string;     // Centro clínico específico (opcional = aplica a todos)
   modality?: ProcedureModality;
   fullInstructions: string;    // Extended version for Email
   shortInstructions: string;   // Short version for WhatsApp (~280 chars)

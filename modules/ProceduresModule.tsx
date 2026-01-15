@@ -561,8 +561,15 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-grow min-w-0">
-                        <div className="flex items-center gap-3 mb-3">
+                        <div className="flex items-center gap-3 mb-3 flex-wrap">
                           <h4 className="text-sm font-black uppercase tracking-tight">{inst.procedureType}</h4>
+                          {inst.clinicalCenter ? (
+                            <span className="px-2 py-1 bg-purple-600/10 text-purple-600 rounded-lg text-[8px] font-black uppercase flex items-center gap-1">
+                              <Building2 className="w-3 h-3" /> {inst.clinicalCenter}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-1 bg-slate-500/10 text-slate-500 rounded-lg text-[8px] font-black uppercase">Genérico</span>
+                          )}
                           {inst.modality && (
                             <span className="px-2 py-1 bg-blue-600/10 text-blue-600 rounded-lg text-[8px] font-black uppercase">{inst.modality}</span>
                           )}
@@ -614,7 +621,7 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
             if (updated) setSelectedProcedure(updated);
           }}
           isDark={isDark}
-          instructions={getInstructionForProcedure(selectedProcedure.procedureType)}
+          instructions={getInstructionForProcedure(selectedProcedure.procedureType, selectedProcedure.clinicalCenter)}
         />
       )}
 
@@ -648,6 +655,7 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
           isDark={isDark}
           instruction={editingInstruction}
           catalog={catalog}
+          centers={centers}
           onClose={() => {
             setShowInstructionModal(false);
             setEditingInstruction(null);
@@ -1443,10 +1451,12 @@ const InstructionFormModal: React.FC<{
   isDark: boolean;
   instruction: ProcedureInstructions | null;
   catalog: any[];
+  centers: string[];
   onClose: () => void;
   onSubmit: (data: Omit<ProcedureInstructions, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
-}> = ({ isDark, instruction, catalog, onClose, onSubmit }) => {
+}> = ({ isDark, instruction, catalog, centers, onClose, onSubmit }) => {
   const [procedureType, setProcedureType] = useState(instruction?.procedureType || '');
+  const [clinicalCenter, setClinicalCenter] = useState(instruction?.clinicalCenter || '');
   const [modality, setModality] = useState(instruction?.modality || '');
   const [fullInstructions, setFullInstructions] = useState(instruction?.fullInstructions || '');
   const [shortInstructions, setShortInstructions] = useState(instruction?.shortInstructions || '');
@@ -1466,6 +1476,7 @@ const InstructionFormModal: React.FC<{
 
       await onSubmit({
         procedureType: procedureType.trim(),
+        clinicalCenter: clinicalCenter.trim() || undefined,
         modality: modality as any || undefined,
         fullInstructions: fullInstructions.trim(),
         shortInstructions: shortInstructions.trim(),
@@ -1495,20 +1506,36 @@ const InstructionFormModal: React.FC<{
 
         <form onSubmit={handleSubmit} className="p-10 space-y-8">
           {/* Procedure Type */}
-          <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Tipo de Procedimiento *</label>
-            <input
-              type="text"
-              value={procedureType}
-              onChange={(e) => setProcedureType(e.target.value)}
-              placeholder="Ej: Biopsia Hepática"
-              list="procedure-types"
-              className={`w-full px-6 py-4 rounded-2xl border text-sm font-medium ${isDark ? 'bg-slate-900 border-slate-800 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 focus:border-emerald-500'} outline-none transition-colors`}
-              required
-            />
-            <datalist id="procedure-types">
-              {catalog.map(c => <option key={c.id} value={c.name} />)}
-            </datalist>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Tipo de Procedimiento *</label>
+              <input
+                type="text"
+                value={procedureType}
+                onChange={(e) => setProcedureType(e.target.value)}
+                placeholder="Ej: Biopsia Hepática"
+                list="procedure-types"
+                className={`w-full px-6 py-4 rounded-2xl border text-sm font-medium ${isDark ? 'bg-slate-900 border-slate-800 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 focus:border-emerald-500'} outline-none transition-colors`}
+                required
+              />
+              <datalist id="procedure-types">
+                {catalog.map(c => <option key={c.id} value={c.name} />)}
+              </datalist>
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Centro Clínico <span className="opacity-40">(Vacío = Genérico)</span></label>
+              <input
+                type="text"
+                value={clinicalCenter}
+                onChange={(e) => setClinicalCenter(e.target.value)}
+                placeholder="Ej: Hospital Regional o dejar vacío para todos"
+                list="centers-instructions"
+                className={`w-full px-6 py-4 rounded-2xl border text-sm font-medium ${isDark ? 'bg-slate-900 border-slate-800 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 focus:border-emerald-500'} outline-none transition-colors`}
+              />
+              <datalist id="centers-instructions">
+                {centers.map(c => <option key={c} value={c} />)}
+              </datalist>
+            </div>
           </div>
 
           {/* Modality & Fasting */}

@@ -110,8 +110,22 @@ export const useInstructions = () => {
         }
     };
 
-    const getInstructionForProcedure = (procedureType: string): ProcedureInstructions | undefined => {
-        return instructions.find(i => i.procedureType.toLowerCase() === procedureType.toLowerCase());
+    const getInstructionForProcedure = (procedureType: string, clinicalCenter?: string): ProcedureInstructions | undefined => {
+        const procedureLower = procedureType.toLowerCase();
+
+        // First, try to find a center-specific instruction
+        if (clinicalCenter) {
+            const centerSpecific = instructions.find(
+                i => i.procedureType.toLowerCase() === procedureLower &&
+                    i.clinicalCenter?.toLowerCase() === clinicalCenter.toLowerCase()
+            );
+            if (centerSpecific) return centerSpecific;
+        }
+
+        // Fallback to generic instruction (no center specified)
+        return instructions.find(
+            i => i.procedureType.toLowerCase() === procedureLower && !i.clinicalCenter
+        );
     };
 
     return {
