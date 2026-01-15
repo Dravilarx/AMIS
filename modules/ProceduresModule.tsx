@@ -414,61 +414,61 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
 
       {/* Table View */}
       {viewMode === 'table' && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden print:border-0">
+        <div className={`rounded-[32px] border overflow-hidden print:border-0 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+              <thead className={`border-b ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                 <tr>
-                  <th className="px-4 py-3 text-left w-12 print:hidden">
+                  <th className="px-6 py-4 text-left w-12 print:hidden">
                     <input type="checkbox" checked={selectedIds.size === paginatedProcedures.length && paginatedProcedures.length > 0} onChange={handleSelectAll} className="rounded border-slate-300" />
                   </th>
                   <TableHeader label="RUT" field="patientRut" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                   <TableHeader label="Paciente" field="patientName" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                   <TableHeader label="Procedimiento" field="procedureType" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
                   <TableHeader label="Fecha" field="scheduledDate" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Médico</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-40">Médico</th>
                   <TableHeader label="Sede" field="clinicalCenter" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Docs</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-40">Docs</th>
                   <TableHeader label="Estado" field="status" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider print:hidden">Acciones</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest opacity-40 print:hidden">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+              <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-100'}`}>
                 {paginatedProcedures.map((proc, idx) => {
                   const doctor = radiologists.find(r => r.id === proc.radiologistId);
                   const docPercent = getDocCompletionPercent(proc);
                   return (
-                    <tr key={proc.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800 ${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/50'}`}>
-                      <td className="px-4 py-3 print:hidden">
+                    <tr key={proc.id} className={`transition-all hover:bg-slate-50 dark:hover:bg-slate-800/50 ${idx % 2 === 0 ? '' : isDark ? 'bg-slate-800/20' : 'bg-slate-50/50'}`}>
+                      <td className="px-6 py-4 print:hidden">
                         <input type="checkbox" checked={selectedIds.has(proc.id)} onChange={() => handleSelectOne(proc.id)} className="rounded border-slate-300" />
                       </td>
-                      <td className="px-4 py-3 text-sm font-mono">{proc.patientRut}</td>
-                      <td className="px-4 py-3 text-sm font-medium">
+                      <td className="px-6 py-4 text-sm font-mono font-bold">{proc.patientRut}</td>
+                      <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          {proc.patientName}
+                          <span className="text-sm font-black uppercase tracking-tight">{proc.patientName}</span>
                           {proc.takesAnticoagulants && <AlertTriangle className="w-4 h-4 text-amber-500" title="Anticoagulantes" />}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{proc.procedureType || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">
+                      <td className="px-6 py-4 text-sm font-bold opacity-60">{proc.procedureType || '-'}</td>
+                      <td className="px-6 py-4 text-sm font-bold opacity-60">
                         {proc.scheduledDate ? new Date(proc.scheduledDate).toLocaleDateString('es-CL') : 'Sin programar'}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{doctor ? `Dr. ${doctor.lastName}` : '-'}</td>
-                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{proc.clinicalCenter || '-'}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${docPercent === 100 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                            {docPercent}%
-                          </div>
+                      <td className="px-6 py-4 text-sm font-bold opacity-60">{doctor ? `Dr. ${doctor.lastName}` : '-'}</td>
+                      <td className="px-6 py-4">
+                        <span className="px-3 py-1.5 bg-purple-600/10 text-purple-600 rounded-lg text-[9px] font-black uppercase">{proc.clinicalCenter || '-'}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-[10px] font-black ${docPercent === 100 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
+                          {docPercent}%
                         </div>
                       </td>
-                      <td className="px-4 py-3"><StatusBadge status={proc.status} /></td>
-                      <td className="px-4 py-3 print:hidden">
+                      <td className="px-6 py-4"><StatusBadge status={proc.status} /></td>
+                      <td className="px-6 py-4 print:hidden">
                         <div className="flex items-center gap-2">
-                          <button onClick={() => setSelectedProcedure(proc)} className="p-1 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded text-blue-600" title="Ver detalles">
+                          <button onClick={() => setSelectedProcedure(proc)} className="p-2.5 bg-blue-600/10 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all" title="Ver detalles">
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button onClick={() => setEditingProcedure(proc)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-600" title="Editar">
+                          <button onClick={() => setEditingProcedure(proc)} className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all" title="Editar">
                             <Edit2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -481,27 +481,28 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
           </div>
 
           {/* Pagination */}
-          <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between print:hidden">
+          <div className={`px-6 py-4 border-t flex items-center justify-between print:hidden ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
             <div className="flex items-center gap-4">
-              <span className="text-sm text-slate-600">Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredProcedures.length)} de {filteredProcedures.length}</span>
-              <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-sm bg-white dark:bg-slate-800">
+              <span className="text-sm opacity-40 font-bold">Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredProcedures.length)} de {filteredProcedures.length}</span>
+              <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className={`px-3 py-2 rounded-xl border font-bold text-sm ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
                 <option value={20}>20</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-2 border border-slate-300 dark:border-slate-600 rounded disabled:opacity-50">
+              <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className={`p-2.5 rounded-xl border disabled:opacity-30 transition-all ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-100'}`}>
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="px-3 py-1 text-sm">{currentPage} / {totalPages || 1}</span>
-              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-2 border border-slate-300 dark:border-slate-600 rounded disabled:opacity-50">
+              <span className="px-4 py-2 text-sm font-bold">{currentPage} / {totalPages || 1}</span>
+              <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className={`p-2.5 rounded-xl border disabled:opacity-30 transition-all ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-100'}`}>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         </div>
       )}
+
 
       {/* Calendar View */}
       {viewMode === 'calendar' && (
