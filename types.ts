@@ -22,7 +22,8 @@ export type ActiveModule =
   | 'signatures'
   | 'management'
   | 'shifts'
-  | 'indicators';
+  | 'indicators'
+  | 'workhub';
 
 export type RolePermissions = Record<UserRole, ActiveModule[]>;
 // ... resto del archivo se mantiene igual
@@ -304,4 +305,75 @@ export interface ProcedureInstructions {
   fastingHours?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+// ==================== WORKHUB TYPES ====================
+
+// Calendar Event
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  description?: string;
+  startDate: string;           // ISO datetime
+  endDate: string;             // ISO datetime
+  allDay: boolean;
+  location?: string;
+  creatorId: string;
+  participantIds: string[];    // Staff invited
+  visibility: 'private' | 'team' | 'public';
+  color?: string;              // Event color coding
+  recurrence?: 'none' | 'daily' | 'weekly' | 'monthly';
+  calendarId: string;          // Which calendar it belongs to
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Shared Calendar with permissions
+export interface SharedCalendar {
+  id: string;
+  name: string;
+  description?: string;
+  ownerId: string;
+  color: string;
+  members: CalendarMember[];
+  isDefault?: boolean;         // User's personal calendar
+  createdAt: string;
+}
+
+export interface CalendarMember {
+  userId: string;
+  permission: 'view' | 'edit' | 'admin';
+  addedAt: string;
+}
+
+// Chat Channel (Group or 1:1)
+export interface ChatChannel {
+  id: string;
+  name: string;                // Channel name or empty for 1:1
+  type: 'direct' | 'group';
+  memberIds: string[];
+  creatorId: string;
+  lastMessageAt?: string;
+  lastMessagePreview?: string;
+  createdAt: string;
+}
+
+// Chat Message
+export interface ChatMessage {
+  id: string;
+  channelId: string;
+  senderId: string;
+  content: string;
+  timestamp: string;
+  readBy: string[];            // UserIds who have read this message
+  attachments?: ChatAttachment[];
+  replyToId?: string;          // For threaded replies
+}
+
+export interface ChatAttachment {
+  id: string;
+  type: 'image' | 'file' | 'link';
+  name: string;
+  url: string;
+  size?: number;
 }

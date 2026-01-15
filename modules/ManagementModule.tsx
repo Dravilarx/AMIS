@@ -142,10 +142,11 @@ const ManagementModule: React.FC<Props> = ({ isDark, currentUser }) => {
       setIsSaving(true);
       if (saveType === 'roles') {
         for (const role of roles) {
-          await updateRolePermissions(role, localRolePermissions[role]);
+          const m = localRolePermissions[role] || []; // Fallback a array vacío si es undefined
+          await updateRolePermissions(role, m);
         }
       } else if (saveType === 'user' && selectedEmpId) {
-        await updateUserPermissions(selectedEmpId, pendingUserModules);
+        await updateUserPermissions(selectedEmpId, pendingUserModules || []);
       } else if (saveType === 'reset' && selectedEmpId) {
         await updateUserPermissions(selectedEmpId, null);
       }

@@ -4,11 +4,11 @@ import { UserRole, RolePermissions, ActiveModule, UserSession } from '../types';
 import { addDocument, getDocuments, updateDocument, deleteDocument, setDocument } from '../services/firestoreService';
 
 const DEFAULT_PERMISSIONS: RolePermissions = {
-  'Superuser': ['dashboard', 'institutions', 'agrawall', 'hr', 'documentation', 'timeoff', 'signatures', 'news', 'messaging', 'management', 'shifts', 'procedures', 'indicators'],
-  'Jefatura': ['dashboard', 'institutions', 'agrawall', 'hr', 'documentation', 'timeoff', 'signatures', 'news', 'messaging', 'shifts', 'indicators'],
-  'Médico': ['dashboard', 'agrawall', 'procedures', 'timeoff', 'signatures', 'news', 'messaging', 'shifts'],
-  'Técnico': ['dashboard', 'procedures', 'timeoff', 'news', 'messaging'],
-  'Administrativo': ['dashboard', 'documentation', 'timeoff', 'news', 'messaging', 'institutions', 'shifts'],
+  'Superuser': ['dashboard', 'institutions', 'agrawall', 'hr', 'documentation', 'timeoff', 'signatures', 'news', 'messaging', 'management', 'shifts', 'procedures', 'indicators', 'workhub'],
+  'Jefatura': ['dashboard', 'institutions', 'agrawall', 'hr', 'documentation', 'timeoff', 'signatures', 'news', 'messaging', 'shifts', 'indicators', 'workhub'],
+  'Médico': ['dashboard', 'agrawall', 'procedures', 'timeoff', 'signatures', 'news', 'messaging', 'shifts', 'workhub'],
+  'Técnico': ['dashboard', 'procedures', 'timeoff', 'news', 'messaging', 'workhub'],
+  'Administrativo': ['dashboard', 'documentation', 'timeoff', 'news', 'messaging', 'institutions', 'shifts', 'workhub'],
 };
 
 export const usePermissions = () => {
@@ -26,7 +26,7 @@ export const usePermissions = () => {
         setLoading(true);
         const roleData = await getDocuments<any>(roleCol);
         if (roleData.length > 0) {
-          const permsRecord: any = {};
+          const permsRecord: any = { ...DEFAULT_PERMISSIONS };
           roleData.forEach((item: any) => {
             permsRecord[item.role] = item.modules;
           });

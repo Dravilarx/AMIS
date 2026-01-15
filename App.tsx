@@ -25,7 +25,8 @@ import {
   Lock,
   Settings2,
   Clock,
-  BarChart3
+  BarChart3,
+  CalendarClock
 } from 'lucide-react';
 import AgrawallModule from './modules/AgrawallModule';
 import HRModule from './modules/HRModule';
@@ -41,6 +42,7 @@ import ManagementModule from './modules/ManagementModule';
 import ShiftsModule from './modules/ShiftsModule';
 import IndicatorsModule from './modules/IndicatorsModule';
 import DoctorAgendaPanel from './modules/DoctorAgendaPanel';
+import WorkHubModule from './modules/WorkHubModule';
 import { ActiveModule, UserSession, UserRole } from './types';
 import { usePermissions } from './hooks/usePermissions';
 
@@ -105,6 +107,7 @@ const App: React.FC = () => {
     {
       title: "Colaboración",
       items: [
+        { id: 'workhub', label: 'WorkHub', icon: CalendarClock },
         { id: 'news', label: 'Comunicados', icon: Megaphone },
         { id: 'messaging', label: 'Mensajería', icon: Mail },
       ].filter(i => hasAccess(currentUser, i.id as ActiveModule))
@@ -374,6 +377,7 @@ const App: React.FC = () => {
           {activeModule === 'signatures' && hasAccess(currentUser, 'signatures') && <SignatureModule isDark={isDark} currentUser={currentUser} />}
           {activeModule === 'management' && hasAccess(currentUser, 'management') && <ManagementModule isDark={isDark} currentUser={currentUser} />}
           {activeModule === 'shifts' && hasAccess(currentUser, 'shifts') && <ShiftsModule isDark={isDark} currentUser={currentUser} />}
+          {activeModule === 'workhub' && hasAccess(currentUser, 'workhub') && <WorkHubModule isDark={isDark} currentUser={currentUser} />}
         </div>
       </main>
     </div>
