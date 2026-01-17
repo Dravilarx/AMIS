@@ -1676,13 +1676,12 @@ const InstructionFormModal: React.FC<{
 
           {/* Short Instructions */}
           <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Indicaciones Cortas (WhatsApp) * <span className="opacity-40">({shortInstructions.length}/280 caracteres)</span></label>
+            <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Indicaciones Cortas (WhatsApp) * <span className="opacity-40">({shortInstructions.length} caracteres)</span></label>
             <textarea
               value={shortInstructions}
-              onChange={(e) => setShortInstructions(e.target.value.slice(0, 280))}
-              placeholder="Versión resumida para WhatsApp (máx 280 caracteres)..."
-              rows={3}
-              maxLength={280}
+              onChange={(e) => setShortInstructions(e.target.value)}
+              placeholder="Versión optimizada para WhatsApp..."
+              rows={4}
               className={`w-full px-6 py-4 rounded-2xl border text-sm font-medium ${isDark ? 'bg-slate-900 border-slate-800 focus:border-emerald-500' : 'bg-slate-50 border-slate-200 focus:border-emerald-500'} outline-none transition-colors resize-none`}
               required
             />
