@@ -11,6 +11,7 @@ import { GoogleGenAI } from "@google/genai";
 import { useEmployees } from '../hooks/useEmployees';
 import { useProcedures } from '../hooks/useProcedures';
 import { useInstructions } from '../hooks/useInstructions';
+import { useInstitutions } from '../hooks/useInstitutions';
 import { ProcedureStatus, UserSession, ProcedureEntry, Employee, ProcedureInstructions } from '../types';
 
 interface Props {
@@ -24,6 +25,7 @@ type ViewMode = 'table' | 'calendar' | 'stats' | 'instructions';
 
 const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
   const { employees } = useEmployees();
+  const { institutions } = useInstitutions();
   const { procedures, catalog, addProcedure, updateProcedure, deleteProcedure, toggleRequirement } = useProcedures();
   const { instructions, getInstructionForProcedure, addInstruction, updateInstruction, deleteInstruction } = useInstructions();
 
@@ -52,7 +54,28 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
   const [showInstructionModal, setShowInstructionModal] = useState(false);
 
   const radiologists = useMemo(() => employees.filter(e => e.role === 'Médico'), [employees]);
-  const centers = useMemo(() => [...new Set(procedures.map(p => p.clinicalCenter).filter(Boolean))], [procedures]);
+  const centers = useMemo(() => institutions.map(i => i.name), [institutions]);
+
+  // Top 7 most used radiologists and centers
+  const topRadiologists = useMemo(() => {
+    const counts: Record<string, number> = {};
+    procedures.forEach(p => {
+      if (p.radiologistId) counts[p.radiologistId] = (counts[p.radiologistId] || 0) + 1;
+    });
+    return radiologists
+      .sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0))
+      .slice(0, 7);
+  }, [procedures, radiologists]);
+
+  const topCenters = useMemo(() => {
+    const counts: Record<string, number> = {};
+    procedures.forEach(p => {
+      if (p.clinicalCenter) counts[p.clinicalCenter] = (counts[p.clinicalCenter] || 0) + 1;
+    });
+    return institutions
+      .sort((a, b) => (counts[b.name] || 0) - (counts[a.name] || 0))
+      .slice(0, 7);
+  }, [procedures, institutions]);
 
   // Notifications - procedures needing attention
   const notifications = useMemo(() => {
@@ -471,6 +494,17 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
                           <button onClick={() => setEditingProcedure(proc)} className="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all" title="Editar">
                             <Edit2 className="w-4 h-4" />
                           </button>
+                          <button
+                            onClick={async () => {
+                              if (confirm(`¿Eliminar procedimiento de ${proc.patientName}?`)) {
+                                await deleteProcedure(proc.id);
+                              }
+                            }}
+                            className="p-2.5 bg-red-600/10 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all"
+                            title="Eliminar"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -632,8 +666,10 @@ const ProceduresModule: React.FC<Props> = ({ isDark, currentUser }) => {
           isDark={isDark}
           procedure={editingProcedure}
           radiologists={radiologists}
+          topRadiologists={topRadiologists}
           catalog={catalog}
           centers={centers}
+          topCenters={topCenters}
           onClose={() => {
             setShowNewModal(false);
             setEditingProcedure(null);
@@ -1235,11 +1271,13 @@ const ProcedureFormModal: React.FC<{
   isDark: boolean;
   procedure: ProcedureEntry | null;
   radiologists: Employee[];
+  topRadiologists: Employee[];
   catalog: any[];
   centers: string[];
+  topCenters: any[];
   onClose: () => void;
   onSubmit: (data: any) => void;
-}> = ({ isDark, procedure, radiologists, catalog, centers, onClose, onSubmit }) => {
+}> = ({ isDark, procedure, radiologists, topRadiologists, catalog, centers, topCenters, onClose, onSubmit }) => {
   const [patientName, setPatientName] = useState(procedure?.patientName || '');
   const [patientRut, setPatientRut] = useState(procedure?.patientRut || '');
   const [patientPhone, setPatientPhone] = useState(procedure?.patientPhone || '');
@@ -1283,138 +1321,178 @@ const ProcedureFormModal: React.FC<{
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
         onClick={e => e.stopPropagation()}
-        className={`w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl ${isDark ? 'bg-slate-900' : 'bg-white'} shadow-2xl`}
+        className={`w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl ${isDark ? 'bg-slate-900 border border-slate-800' : 'bg-white'} shadow-2xl animate-in zoom-in duration-200`}
       >
         <div className="sticky top-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between z-10">
-          <h3 className="text-lg font-bold">{procedure ? 'Editar Procedimiento' : 'Nuevo Paciente'}</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+          <div>
+            <h3 className="text-lg font-bold">{procedure ? 'Editar Procedimiento' : 'Nuevo Paciente'}</h3>
+            <p className="text-[10px] font-black uppercase tracking-widest opacity-40">Gestión de Intervencionismo</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="block text-sm font-medium mb-1">Nombre del Paciente *</label>
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Nombre del Paciente *</label>
               <input
                 type="text"
                 required
+                placeholder="Nombre completo"
                 value={patientName}
                 onChange={e => setPatientName(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">RUT *</label>
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">RUT *</label>
               <input
                 type="text"
                 required
+                placeholder="12.345.678-9"
                 value={patientRut}
                 onChange={e => setPatientRut(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Teléfono</label>
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Teléfono</label>
               <input
                 type="tel"
+                placeholder="+56 9 ..."
                 value={patientPhone}
                 onChange={e => setPatientPhone(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Email</label>
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Email</label>
               <input
                 type="email"
+                placeholder="paciente@ejemplo.com"
                 value={patientEmail}
                 onChange={e => setPatientEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Previsión</label>
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Previsión</label>
               <input
                 type="text"
                 value={patientInsurance}
                 onChange={e => setPatientInsurance(e.target.value)}
                 placeholder="Fonasa, Isapre..."
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               />
             </div>
             <div className="col-span-2">
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 transition-colors hover:bg-slate-100 dark:hover:bg-slate-700">
                 <input
                   type="checkbox"
                   checked={takesAnticoagulants}
                   onChange={e => setTakesAnticoagulants(e.target.checked)}
-                  className="rounded border-slate-300"
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
-                <span className="text-sm">¿Toma anticoagulantes?</span>
+                <span className="text-sm font-bold opacity-60">¿Toma anticoagulantes?</span>
                 {takesAnticoagulants && <AlertTriangle className="w-4 h-4 text-amber-500" />}
               </label>
             </div>
           </div>
 
-          <hr className="border-slate-200 dark:border-slate-700" />
+          <div className="h-px bg-slate-200 dark:bg-slate-700" />
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-6">
             <div className="col-span-2">
-              <label className="block text-sm font-medium mb-1">Procedimiento *</label>
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Procedimiento *</label>
               <select
                 required
                 value={procedureType}
                 onChange={e => setProcedureType(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               >
-                <option value="">Seleccionar...</option>
+                <option value="">Seleccionar procedimiento...</option>
                 {catalog.filter(c => c.active).map(c => (
                   <option key={c.id} value={c.name}>{c.name} (${c.baseValue.toLocaleString()})</option>
                 ))}
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Médico Responsable</label>
+
+            <div className="col-span-2 md:col-span-1">
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Médico Responsable</label>
               <select
                 value={radiologistId}
                 onChange={e => setRadiologistId(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all mb-2"
               >
                 <option value="">Sin asignar</option>
                 {radiologists.map(r => (
                   <option key={r.id} value={r.id}>Dr. {r.lastName}</option>
                 ))}
               </select>
+              {topRadiologists.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="text-[9px] font-black uppercase opacity-30 mt-1 mr-1">TOP:</span>
+                  {topRadiologists.map(r => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setRadiologistId(r.id)}
+                      className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${radiologistId === r.id ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                    >
+                      {r.lastName}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Sede Clínica</label>
+
+            <div className="col-span-2 md:col-span-1">
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Sede Clínica</label>
               <input
                 type="text"
                 list="centers-list"
                 value={clinicalCenter}
                 onChange={e => setClinicalCenter(e.target.value)}
                 placeholder="Ej. Hospital Regional"
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all mb-2"
               />
               <datalist id="centers-list">
                 {centers.map(c => <option key={c} value={c} />)}
               </datalist>
+              {topCenters.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="text-[9px] font-black uppercase opacity-30 mt-1 mr-1">TOP:</span>
+                  {topCenters.map(c => (
+                    <button
+                      key={c.id || c.name}
+                      type="button"
+                      onClick={() => setClinicalCenter(c.name)}
+                      className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${clinicalCenter === c.name ? 'bg-purple-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                    >
+                      {c.abbreviation || c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+
             <div>
-              <label className="block text-sm font-medium mb-1">Fecha Programada</label>
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Fecha Programada</label>
               <input
                 type="datetime-local"
                 value={scheduledDate}
                 onChange={e => setScheduledDate(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Estado</label>
+              <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-1">Estado</label>
               <select
                 value={status}
                 onChange={e => setStatus(e.target.value as ProcedureStatus)}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800"
+                className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               >
                 <option value="Pendiente Docs">Pendiente Docs</option>
                 <option value="Listo">Listo</option>
@@ -1425,17 +1503,17 @@ const ProcedureFormModal: React.FC<{
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4">
+          <div className="flex justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="px-6 py-2.5 border border-slate-300 dark:border-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+              className="px-8 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black uppercase tracking-widest hover:bg-blue-700 shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2"
             >
               <Save className="w-4 h-4" />
               {procedure ? 'Guardar Cambios' : 'Crear Procedimiento'}
@@ -1446,6 +1524,7 @@ const ProcedureFormModal: React.FC<{
     </div>
   );
 };
+
 
 // Instruction Form Modal
 const InstructionFormModal: React.FC<{
