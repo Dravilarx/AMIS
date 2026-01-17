@@ -102,5 +102,52 @@ export const useEmployees = () => {
     }
   };
 
-  return { employees, loading, error, addEmployee, deleteEmployee, updateEmployee };
+  /**
+   * Get employees with incomplete mandatory fields (RUT, email, name)
+   */
+  const getIncompleteProfiles = (): Employee[] => {
+    return employees.filter(emp => {
+      const hasMissingFields = !emp.idNumber?.trim() ||
+        !emp.email?.trim() ||
+        !emp.firstName?.trim() ||
+        !emp.lastName?.trim();
+      return hasMissingFields && !emp.adminAuthorizedIncomplete;
+    });
+  };
+
+  /**
+   * Authorize a user with incomplete profile to access the system
+   */
+  const authorizeIncompleteAccess = async (id: string) => {
+    try {
+      await updateEmployee(id, { adminAuthorizedIncomplete: true });
+    } catch (err) {
+      console.error('Error authorizing incomplete access:', err);
+      throw err;
+    }
+  };
+
+  /**
+   * Remove authorization for incomplete access
+   */
+  const revokeIncompleteAccess = async (id: string) => {
+    try {
+      await updateEmployee(id, { adminAuthorizedIncomplete: false });
+    } catch (err) {
+      console.error('Error revoking incomplete access:', err);
+      throw err;
+    }
+  };
+
+  return {
+    employees,
+    loading,
+    error,
+    addEmployee,
+    deleteEmployee,
+    updateEmployee,
+    getIncompleteProfiles,
+    authorizeIncompleteAccess,
+    revokeIncompleteAccess
+  };
 };

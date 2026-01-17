@@ -172,11 +172,29 @@ export interface Employee {
   tags?: string[];
   status: 'Activo' | 'Licencia Médica' | 'Vacaciones' | 'Suspendido' | 'Renuncia' | 'Baja Temporal';
   performance: number;
+  // Profile Validation Flags
+  profileComplete?: boolean;
+  adminAuthorizedIncomplete?: boolean;
 }
+
 
 // Time Off Types
 export type TimeOffType = 'Vacación' | 'Licencia Médica' | 'Permiso Administrativo' | 'Ausencia' | 'Capacitación';
 export type TimeOffStatus = 'Pendiente' | 'Aprobado' | 'Rechazado' | 'Finalizado';
+
+// Profile Validation Types
+export interface ProfileValidation {
+  isComplete: boolean;
+  missingFields: string[];
+  authorizedIncomplete: boolean;
+}
+
+export interface IncompleteProfileSummary {
+  employees: Employee[];
+  institutions: Institution[];
+  totalIncomplete: number;
+}
+
 
 export interface TimeOffEntry {
   id: string;

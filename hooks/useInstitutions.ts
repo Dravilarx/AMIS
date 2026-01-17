@@ -182,6 +182,15 @@ export const useInstitutions = () => {
     }
   };
 
+  /**
+   * Get institutions with incomplete mandatory fields (name, city)
+   */
+  const getIncompleteInstitutions = (): Institution[] => {
+    return institutions.filter(inst =>
+      !inst.name?.trim() || !inst.city?.trim()
+    );
+  };
+
   return {
     institutions,
     contracts,
@@ -192,6 +201,7 @@ export const useInstitutions = () => {
     updateInstitution,
     updateContract,
     deleteInstitution,
-    deleteContract
+    deleteContract,
+    getIncompleteInstitutions
   };
 };

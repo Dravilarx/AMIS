@@ -25,11 +25,16 @@ import {
   ArrowRight,
   RotateCcw,
   UserCheck,
-  Activity
+  Activity,
+  UserX,
+  CheckCircle,
+  Edit
 } from 'lucide-react';
 import { usePermissions } from '../hooks/usePermissions';
 import { useEmployees } from '../hooks/useEmployees';
-import { UserRole, ActiveModule, Employee, UserSession } from '../types';
+import { useInstitutions } from '../hooks/useInstitutions';
+import { useProfileValidation } from '../hooks/useProfileValidation';
+import { UserRole, ActiveModule, Employee, UserSession, Institution } from '../types';
 
 interface Props {
   isDark: boolean;
@@ -38,9 +43,11 @@ interface Props {
 
 const ManagementModule: React.FC<Props> = ({ isDark, currentUser }) => {
   const { permissions, userPermissions, updateRolePermissions, updateUserPermissions } = usePermissions();
-  const { employees } = useEmployees();
+  const { employees, authorizeIncompleteAccess, revokeIncompleteAccess } = useEmployees();
+  const { institutions, getIncompleteInstitutions } = useInstitutions();
+  const { validateEmployee, validateInstitution } = useProfileValidation();
 
-  const [viewTab, setViewTab] = useState<'roles' | 'usuarios'>('roles');
+  const [viewTab, setViewTab] = useState<'roles' | 'usuarios' | 'incompletos'>('roles');
   const [localRolePermissions, setLocalRolePermissions] = useState(permissions);
   const [selectedEmpId, setSelectedEmpId] = useState<string | null>(null);
   const [empSearch, setEmpSearch] = useState('');
@@ -179,6 +186,10 @@ const ManagementModule: React.FC<Props> = ({ isDark, currentUser }) => {
           <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl shadow-inner">
             <button onClick={() => setViewTab('roles')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewTab === 'roles' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'opacity-40'}`}>Matriz por Rol</button>
             <button onClick={() => setViewTab('usuarios')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewTab === 'usuarios' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'opacity-40'}`}>Usuarios Individuales</button>
+            <button onClick={() => setViewTab('incompletos')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${viewTab === 'incompletos' ? 'bg-white dark:bg-slate-700 text-amber-600 shadow-sm' : 'opacity-40'}`}>
+              <AlertTriangle className="w-3 h-3" />
+              Perfiles Incompletos
+            </button>
           </div>
           {viewTab === 'roles' && (
             <button
@@ -191,7 +202,7 @@ const ManagementModule: React.FC<Props> = ({ isDark, currentUser }) => {
         </div>
       </div>
 
-      {viewTab === 'roles' ? (
+      {viewTab === 'roles' && (
         <div className="grid grid-cols-1 gap-8">
           <div className={`p-10 rounded-[48px] border overflow-hidden ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
             <div className="flex items-center justify-between mb-10">
@@ -254,7 +265,9 @@ const ManagementModule: React.FC<Props> = ({ isDark, currentUser }) => {
             </div>
           </div>
         </div>
-      ) : (
+      )}
+
+      {viewTab === 'usuarios' && (
         <div className="grid lg:grid-cols-12 gap-10">
           {/* Navegador de Staff */}
           <div className={`lg:col-span-4 p-8 rounded-[48px] border overflow-hidden flex flex-col ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
@@ -386,6 +399,160 @@ const ManagementModule: React.FC<Props> = ({ isDark, currentUser }) => {
                 <p className="text-sm font-black uppercase tracking-widest opacity-60 max-w-sm mx-auto">Seleccione un miembro del staff para otorgar o restringir accesos por encima de su jerarquía corporativa básica.</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Panel de Perfiles Incompletos */}
+      {viewTab === 'incompletos' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+          {/* Empleados Incompletos */}
+          <div className={`p-10 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <div className="flex items-center gap-4 mb-8">
+              <div className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl">
+                <UserX className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-tighter">Empleados con Datos Faltantes</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest opacity-40">RUT, Email, Nombre o Apellido incompletos</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+              {employees.filter(emp => {
+                const validation = validateEmployee(emp);
+                return !validation.isComplete;
+              }).length === 0 ? (
+                <div className="p-10 text-center opacity-30">
+                  <CheckCircle className="w-12 h-12 mx-auto mb-4 text-emerald-500" />
+                  <p className="text-sm font-black uppercase tracking-widest">Todos los empleados tienen datos completos</p>
+                </div>
+              ) : (
+                employees.filter(emp => {
+                  const validation = validateEmployee(emp);
+                  return !validation.isComplete;
+                }).map(emp => {
+                  const validation = validateEmployee(emp);
+                  return (
+                    <div key={emp.id} className={`p-6 rounded-[32px] border transition-all ${isDark ? 'border-slate-800 bg-slate-800/30' : 'border-slate-100 bg-slate-50'}`}>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+                            <User className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="font-black uppercase text-sm">{emp.firstName || '???'} {emp.lastName || '???'}</p>
+                            <p className="text-[10px] font-bold opacity-40">{emp.role} • {emp.department || 'Sin departamento'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {validation.authorizedIncomplete ? (
+                            <button
+                              onClick={() => revokeIncompleteAccess(emp.id)}
+                              className="px-4 py-2 bg-emerald-500/10 text-emerald-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
+                            >
+                              Autorizado ✓
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => authorizeIncompleteAccess(emp.id)}
+                              className="px-4 py-2 bg-amber-500/10 text-amber-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-amber-500 hover:text-white transition-all"
+                            >
+                              Autorizar Acceso
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {validation.missingFields.map(field => (
+                          <span key={field} className="px-3 py-1 bg-red-500/10 text-red-500 rounded-full text-[9px] font-black uppercase">
+                            Falta: {field}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Instituciones Incompletas */}
+          <div className={`p-10 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <div className="flex items-center gap-4 mb-8">
+              <div className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl">
+                <Building2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-tighter">Instituciones con Datos Faltantes</h3>
+                <p className="text-[10px] font-black uppercase tracking-widest opacity-40">Nombre o Ciudad incompletos</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+              {getIncompleteInstitutions().length === 0 ? (
+                <div className="p-10 text-center opacity-30">
+                  <CheckCircle className="w-12 h-12 mx-auto mb-4 text-emerald-500" />
+                  <p className="text-sm font-black uppercase tracking-widest">Todas las instituciones tienen datos completos</p>
+                </div>
+              ) : (
+                getIncompleteInstitutions().map(inst => {
+                  const validation = validateInstitution(inst);
+                  return (
+                    <div key={inst.id} className={`p-6 rounded-[32px] border transition-all ${isDark ? 'border-slate-800 bg-slate-800/30' : 'border-slate-100 bg-slate-50'}`}>
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+                            <Building2 className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="font-black uppercase text-sm">{inst.name || '(Sin nombre)'}</p>
+                            <p className="text-[10px] font-bold opacity-40">{inst.category} • {inst.city || '(Sin ciudad)'}</p>
+                          </div>
+                        </div>
+                        <button className="px-4 py-2 bg-indigo-500/10 text-indigo-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-indigo-500 hover:text-white transition-all flex items-center gap-2">
+                          <Edit className="w-3 h-3" /> Editar
+                        </button>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {validation.missingFields.map(field => (
+                          <span key={field} className="px-3 py-1 bg-red-500/10 text-red-500 rounded-full text-[9px] font-black uppercase">
+                            Falta: {field}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Panel Informativo */}
+          <div className={`lg:col-span-2 p-8 rounded-[48px] border ${isDark ? 'bg-amber-900/10 border-amber-900/20' : 'bg-amber-50 border-amber-100'}`}>
+            <div className="flex items-start gap-6">
+              <div className="p-4 bg-amber-500 text-white rounded-2xl">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-lg font-black uppercase tracking-tight mb-2 text-amber-600">Política de Datos Obligatorios</h4>
+                <p className="text-sm opacity-70 leading-relaxed">
+                  Los usuarios con datos incompletos verán una alerta al ingresar al sistema solicitando que completen su información.
+                  Como administrador, puede <strong>autorizar temporalmente</strong> el acceso de usuarios con datos incompletos si es necesario.
+                  Esta autorización puede ser revocada en cualquier momento.
+                </p>
+                <div className="mt-4 flex gap-4">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-white/50 dark:bg-slate-900/50 rounded-xl">
+                    <User className="w-4 h-4 text-amber-500" />
+                    <span className="text-[10px] font-black uppercase">Empleados: RUT, Email, Nombre, Apellido</span>
+                  </div>
+                  <div className="flex items-center gap-2 px-4 py-2 bg-white/50 dark:bg-slate-900/50 rounded-xl">
+                    <Building2 className="w-4 h-4 text-amber-500" />
+                    <span className="text-[10px] font-black uppercase">Instituciones: Nombre, Ciudad</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
