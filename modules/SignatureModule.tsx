@@ -46,9 +46,16 @@ const SignatureModule: React.FC<Props> = ({ isDark, currentUser }) => {
   }), [documents]);
 
   const handleCreateComplete = async (data: CreateDocumentInput) => {
-    const doc = await createDocument(data);
-    setActiveDocId(doc.id);
-    setView('detail');
+    try {
+      console.log('Creating document with data:', data);
+      const doc = await createDocument(data);
+      console.log('Document created:', doc);
+      setActiveDocId(doc.id);
+      setView('detail');
+    } catch (err) {
+      console.error('Error creating document:', err);
+      alert('Error al crear el documento: ' + (err instanceof Error ? err.message : 'Error desconocido'));
+    }
   };
 
   const handleSign = async (signatureData: string) => {
@@ -312,10 +319,14 @@ const CreateWizard = ({ isDark, currentUser, onComplete, onCancel }: any) => {
     setSigners(prev => prev.filter((_, i) => i !== idx).map((s, i) => ({ ...s, order: i + 1 })));
   };
 
-  const handleSubmit = () => {
-    if (!formData.title || signers.length === 0) return;
+  const handleSubmit = async () => {
+    if (!formData.title || signers.length === 0) {
+      alert('Por favor complete el título y agregue al menos un firmante');
+      return;
+    }
 
-    onComplete({
+    console.log('Submitting form:', { formData, signers });
+    await onComplete({
       ...formData,
       signers,
       createdBy: currentUser.id
