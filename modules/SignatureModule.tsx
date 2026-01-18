@@ -570,30 +570,39 @@ const CreateWizard = ({ isDark, currentUser, onComplete, onCancel }: any) => {
 
           <div
             ref={positionPreviewRef}
-            className="bg-white rounded-2xl shadow-lg p-6 min-h-[500px] relative border border-slate-200"
-            style={{ fontFamily: 'serif' }}
+            className="bg-white rounded-2xl shadow-lg min-h-[600px] relative border border-slate-200 overflow-hidden"
             onMouseMove={(e) => draggingSignerIdx !== null && handlePositionDrag(e, draggingSignerIdx)}
             onMouseUp={() => setDraggingSignerIdx(null)}
             onMouseLeave={() => setDraggingSignerIdx(null)}
           >
-            {/* Document Preview */}
-            <div className="text-center mb-4 pb-3 border-b border-slate-200">
-              <h1 className="text-lg font-bold text-slate-800">{formData.title || 'Título del Documento'}</h1>
-            </div>
-            <div className="text-slate-600 text-xs leading-relaxed">
-              {formData.content?.substring(0, 400) || 'Contenido del documento...'}
-              {formData.content?.length > 400 && '...'}
-            </div>
+            {/* Show PDF if external, or content if Rich Text */}
+            {formData.origin === 'Externo_PDF' && formData.fileUrl ? (
+              <iframe
+                src={formData.fileUrl}
+                className="w-full h-[600px] border-0"
+                title="Vista previa PDF"
+              />
+            ) : (
+              <div className="p-6" style={{ fontFamily: 'serif' }}>
+                {/* Document Header */}
+                <div className="text-center mb-4 pb-3 border-b border-slate-200">
+                  <h1 className="text-lg font-bold text-slate-800">{formData.title || 'Título del Documento'}</h1>
+                </div>
+                <div className="text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">
+                  {formData.content || 'Sin contenido'}
+                </div>
+              </div>
+            )}
 
-            {/* Draggable Signature Positions */}
+            {/* Draggable Signature Positions - Overlay on top */}
             {signers.map((s, idx) => (
               <div
                 key={idx}
-                className={`absolute border-2 border-dashed rounded-lg p-2 cursor-move transition-all ${draggingSignerIdx === idx ? 'border-indigo-500 bg-indigo-50 shadow-lg z-10' : 'border-amber-400 bg-amber-50/80'}`}
+                className={`absolute border-2 border-dashed rounded-lg p-2 cursor-move transition-all z-20 ${draggingSignerIdx === idx ? 'border-indigo-500 bg-indigo-100/90 shadow-lg' : 'border-amber-500 bg-amber-100/90'}`}
                 style={{
                   left: `${s.position?.x || 20}%`,
                   top: `${s.position?.y || 70}%`,
-                  width: '130px',
+                  width: '140px',
                   transform: 'translate(-50%, -50%)'
                 }}
                 onMouseDown={() => setDraggingSignerIdx(idx)}
@@ -661,7 +670,7 @@ const DocumentDetail = ({ doc, isDark, onSendForSigning, onOpenSignPanel, onDele
     try {
       const canvas = document.createElement('canvas');
       const width = 800;
-      const height = 1100;
+      const height = 1200;
       canvas.width = width * 2;
       canvas.height = height * 2;
 
@@ -670,45 +679,51 @@ const DocumentDetail = ({ doc, isDark, onSendForSigning, onOpenSignPanel, onDele
 
       ctx.scale(2, 2);
 
-      // Background
+      // Background - ensure it's white
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, width, height);
 
       // Border
-      ctx.strokeStyle = '#e2e8f0';
+      ctx.strokeStyle = '#94a3b8';
       ctx.lineWidth = 2;
-      ctx.strokeRect(30, 30, width - 60, height - 60);
+      ctx.strokeRect(40, 40, width - 80, height - 80);
 
-      // Header
+      // Header decoration
+      ctx.fillStyle = '#4f46e5';
+      ctx.fillRect(40, 40, width - 80, 8);
+
+      // Title
       ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 28px Arial, sans-serif';
+      ctx.font = 'bold 24px Arial, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(doc.title, width / 2, 80);
+      ctx.fillText(doc.title || 'Documento', width / 2, 90);
 
+      // Description
       if (doc.description) {
-        ctx.font = '14px Arial, sans-serif';
+        ctx.font = '12px Arial, sans-serif';
         ctx.fillStyle = '#64748b';
-        ctx.fillText(doc.description, width / 2, 105);
+        ctx.fillText(doc.description, width / 2, 115);
       }
 
-      // Divider
+      // Divider line
       ctx.beginPath();
-      ctx.moveTo(60, 130);
-      ctx.lineTo(width - 60, 130);
+      ctx.moveTo(60, 140);
+      ctx.lineTo(width - 60, 140);
       ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
       ctx.stroke();
 
       // Content with word wrap
       ctx.textAlign = 'left';
-      ctx.font = '14px Arial, sans-serif';
+      ctx.font = '13px Arial, sans-serif';
       ctx.fillStyle = '#334155';
 
-      const content = doc.content || 'Documento PDF adjunto';
+      const content = doc.content || (doc.origin === 'Externo_PDF' ? '[Documento PDF Adjunto]' : 'Sin contenido');
       const maxWidth = width - 120;
       const words = content.split(' ');
       let line = '';
-      let y = 160;
-      const lineHeight = 22;
+      let y = 170;
+      const lineHeight = 20;
 
       for (const word of words) {
         const testLine = line + word + ' ';
@@ -717,7 +732,10 @@ const DocumentDetail = ({ doc, isDark, onSendForSigning, onOpenSignPanel, onDele
           ctx.fillText(line.trim(), 60, y);
           line = word + ' ';
           y += lineHeight;
-          if (y > 600) break; // Limit content height
+          if (y > 600) {
+            ctx.fillText('...', 60, y);
+            break;
+          }
         } else {
           line = testLine;
         }
@@ -726,88 +744,132 @@ const DocumentDetail = ({ doc, isDark, onSendForSigning, onOpenSignPanel, onDele
         ctx.fillText(line.trim(), 60, y);
       }
 
-      // Signatures section header
+      // Signatures section
       ctx.beginPath();
-      ctx.moveTo(60, 650);
-      ctx.lineTo(width - 60, 650);
+      ctx.moveTo(60, 680);
+      ctx.lineTo(width - 60, 680);
+      ctx.strokeStyle = '#e2e8f0';
       ctx.stroke();
 
-      ctx.font = 'bold 12px Arial, sans-serif';
-      ctx.fillStyle = '#64748b';
-      ctx.fillText('FIRMAS', 60, 680);
+      ctx.font = 'bold 11px Arial, sans-serif';
+      ctx.fillStyle = '#4f46e5';
+      ctx.textAlign = 'left';
+      ctx.fillText('FIRMAS DIGITALES', 60, 705);
 
-      // Draw signatures
-      const signedSigners = doc.signers.filter((s: any) => s.status === 'Firmado' && s.signatureData);
-      const sigWidth = 320;
-      const sigHeight = 120;
+      // Draw ALL signatures (signed and pending)
+      const sigWidth = 340;
+      const sigHeight = 110;
       let sigX = 60;
-      let sigY = 700;
+      let sigY = 730;
 
-      for (let i = 0; i < signedSigners.length; i++) {
-        const signer = signedSigners[i];
+      for (let i = 0; i < doc.signers.length; i++) {
+        const signer = doc.signers[i];
 
-        // Position calculation (2 per row)
+        // 2 signatures per row
         if (i > 0 && i % 2 === 0) {
           sigX = 60;
-          sigY += sigHeight + 20;
+          sigY += sigHeight + 15;
         } else if (i % 2 === 1) {
-          sigX = width / 2 + 20;
+          sigX = width / 2 + 10;
         }
 
-        // Signature box
-        ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 1;
+        // Only draw if we have space
+        if (sigY + sigHeight > height - 80) continue;
+
+        // Box
+        ctx.strokeStyle = signer.status === 'Firmado' ? '#22c55e' : '#e2e8f0';
+        ctx.lineWidth = signer.status === 'Firmado' ? 2 : 1;
         ctx.strokeRect(sigX, sigY, sigWidth, sigHeight);
 
-        // Draw signature image
-        if (signer.signatureData) {
-          await new Promise<void>((resolve) => {
-            const img = new Image();
-            img.onload = () => {
-              ctx.drawImage(img, sigX + 10, sigY + 5, sigWidth - 20, 70);
-              resolve();
-            };
-            img.onerror = () => resolve();
-            img.src = signer.signatureData;
-          });
+        // Status indicator
+        if (signer.status === 'Firmado') {
+          ctx.fillStyle = '#dcfce7';
+          ctx.fillRect(sigX + 1, sigY + 1, sigWidth - 2, 20);
+          ctx.fillStyle = '#166534';
+          ctx.font = 'bold 9px Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('✓ FIRMADO', sigX + sigWidth / 2, sigY + 14);
+        } else {
+          ctx.fillStyle = '#f1f5f9';
+          ctx.fillRect(sigX + 1, sigY + 1, sigWidth - 2, 20);
+          ctx.fillStyle = '#64748b';
+          ctx.font = '9px Arial, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('Pendiente', sigX + sigWidth / 2, sigY + 14);
+        }
+
+        // Draw signature image if exists
+        if (signer.signatureData && signer.status === 'Firmado') {
+          try {
+            await new Promise<void>((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                ctx.drawImage(img, sigX + 10, sigY + 25, sigWidth - 20, 50);
+                resolve();
+              };
+              img.onerror = () => {
+                // Draw placeholder text if image fails
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = 'italic 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('[Firma Digital]', sigX + sigWidth / 2, sigY + 55);
+                resolve();
+              };
+              img.src = signer.signatureData;
+            });
+          } catch {
+            // Silent fail
+          }
         }
 
         // Signature line
         ctx.beginPath();
-        ctx.moveTo(sigX + 10, sigY + 85);
-        ctx.lineTo(sigX + sigWidth - 10, sigY + 85);
+        ctx.moveTo(sigX + 10, sigY + 80);
+        ctx.lineTo(sigX + sigWidth - 10, sigY + 80);
         ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1;
         ctx.stroke();
 
         // Name and date
-        ctx.font = 'bold 11px Arial, sans-serif';
+        ctx.font = 'bold 10px Arial, sans-serif';
         ctx.fillStyle = '#1e293b';
         ctx.textAlign = 'left';
-        ctx.fillText(signer.fullName, sigX + 10, sigY + 100);
+        ctx.fillText(signer.fullName || 'Firmante', sigX + 10, sigY + 95);
 
-        ctx.font = '9px Arial, sans-serif';
-        ctx.fillStyle = '#64748b';
-        ctx.textAlign = 'right';
-        ctx.fillText(signer.signedAt ? new Date(signer.signedAt).toLocaleDateString() : '', sigX + sigWidth - 10, sigY + 100);
+        if (signer.signedAt) {
+          ctx.font = '9px Arial, sans-serif';
+          ctx.fillStyle = '#64748b';
+          ctx.textAlign = 'right';
+          ctx.fillText(new Date(signer.signedAt).toLocaleDateString('es-CL'), sigX + sigWidth - 10, sigY + 95);
+        }
 
         ctx.textAlign = 'left';
       }
 
-      // Footer with hash
+      // Footer
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(40, height - 70, width - 80, 30);
+
       ctx.font = '8px Arial, sans-serif';
       ctx.fillStyle = '#94a3b8';
       ctx.textAlign = 'center';
-      ctx.fillText(`SHA-256: ${doc.hashOriginal?.substring(0, 40)}...`, width / 2, height - 50);
-      ctx.fillText(`Documento generado por AMIS Central • ${new Date().toLocaleString()}`, width / 2, height - 35);
+      if (doc.hashOriginal) {
+        ctx.fillText(`Integridad SHA-256: ${doc.hashOriginal.substring(0, 32)}...`, width / 2, height - 55);
+      }
+      ctx.fillText(`Generado por AMIS Central • ${new Date().toLocaleString('es-CL')}`, width / 2, height - 42);
 
-      // Download
+      // Download the image
+      const dataUrl = canvas.toDataURL('image/png', 1.0);
       const link = document.createElement('a');
-      link.download = `${doc.title.replace(/[^a-z0-9]/gi, '_')}_firmado.png`;
-      link.href = canvas.toDataURL('image/png', 1.0);
+      link.download = `${(doc.title || 'documento').replace(/[^a-z0-9]/gi, '_')}_firmado.png`;
+      link.href = dataUrl;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+
     } catch (err) {
       console.error('Download error:', err);
-      alert('Error al descargar el documento');
+      alert('Error al descargar el documento: ' + (err as Error).message);
     } finally {
       setDownloading(false);
     }
