@@ -539,3 +539,59 @@ export interface CaseRequest {
   createdBy: string;
   nextReminderDate?: string;
 }
+
+// ==================== DIGITAL SIGNATURE & LEGAL ====================
+
+export type SignatureStatus = 'Borrador' | 'Pendiente' | 'En Proceso' | 'Firmado' | 'Rechazado' | 'Expirado' | 'Enviado' | 'Visto';
+export type SignatureOrigin = 'Interno_RichText' | 'Externo_PDF';
+
+export interface SignatureSigner {
+  id: string; // uuid
+  name: string;
+  email: string;
+  role?: string;
+  order: number;
+  status: 'Pendiente' | 'Firmado' | 'Rechazado';
+  signedAt?: string;
+  signatureData?: string; // Base64 PNG/SVG
+  ipAddress?: string;
+  accessToken?: string; // JWT simulation
+  certificateId?: string; // Mock for now
+}
+
+export interface SignatureEvidence {
+  id: string;
+  signerId: string;
+  timestamp: string;
+  event: 'created' | 'viewed' | 'signed' | 'rejected' | 'completed';
+  ip: string;
+  detail: string;
+  hashSnapshot: string; // SHA-256 of document state at this point
+}
+
+export interface SignatureDocument {
+  id: string;
+  title: string;
+  description?: string;
+  content?: string; // Rich Text content if internal
+  fileUrl?: string; // PDF URL if external or generated
+  origin: SignatureOrigin;
+  currentHash: string; // Current SHA-256 hash of the doc
+  
+  status: SignatureStatus;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  expiresAt?: string;
+
+  signers: SignatureSigner[];
+  evidenceLog: SignatureEvidence[];
+  
+  // Backward compatibility // fields mentioned in previous useSignatures.ts
+  signerName?: string; 
+  signerRole?: string;
+  signerEmail?: string;
+  viewedAt?: string;
+  signedAt?: string;
+  signatureData?: string;
+}
