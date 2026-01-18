@@ -6,9 +6,11 @@ import {
   Edit2, FileText, Globe, Layers, Activity,
   AlertCircle, ChevronRight, Briefcase, TrendingUp, X,
   Zap, UploadCloud, ShieldAlert, HeartPulse, History,
-  Hash, Download, ExternalLink, ShieldCheck, Tag, Pen, Eye
+  Hash, Download, ExternalLink, ShieldCheck, Tag, Pen, Eye, FolderCheck
 } from 'lucide-react';
 import { useInstitutions } from '../hooks/useInstitutions';
+import { useDocumentProfiles } from '../hooks/useDocumentProfiles';
+import { useDocumentRepository } from '../hooks/useDocumentRepository';
 import { analyzeContractDocument } from '../services/geminiService';
 import { Institution, Contract, ContractSLA, SLAValue, DocumentRecord, InstitutionCategory, UserSession } from '../types';
 
@@ -72,12 +74,13 @@ const InstitutionsModule: React.FC<Props> = ({ isDark, currentUser }) => {
     institutions, contracts, addInstitution, addContract,
     deleteInstitution, deleteContract, updateInstitution, updateContract
   } = useInstitutions();
+  const { profiles: allProfiles, assignProfile: assignRCDProfile } = useDocumentRepository();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedInstId, setSelectedInstId] = useState<string | null>(null);
   const [showInstModal, setShowInstModal] = useState(false);
   const [showContModal, setShowContModal] = useState(false);
-  const [viewMode, setViewMode] = useState<'details' | 'vault'>('details');
+  const [viewMode, setViewMode] = useState<'details' | 'vault' | 'profiles'>('details');
   const [globalViewMode, setGlobalViewMode] = useState<'dashboard' | 'table'>('dashboard');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -378,6 +381,7 @@ const InstitutionsModule: React.FC<Props> = ({ isDark, currentUser }) => {
                       <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
                         <button onClick={() => setViewMode('details')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'details' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Estructura</button>
                         <button onClick={() => setViewMode('vault')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'vault' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Documentos</button>
+                        <button onClick={() => setViewMode('profiles')} className={`px-5 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'profiles' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm' : 'opacity-40'}`}>Perfiles</button>
                       </div>
                       <button
                         onClick={() => setShowContModal(true)}
@@ -445,7 +449,7 @@ const InstitutionsModule: React.FC<Props> = ({ isDark, currentUser }) => {
                         })
                       )}
                     </div>
-                  ) : (
+                  ) : viewMode === 'vault' ? (
                     <div className="flex-grow flex flex-col space-y-6">
                       <div className="flex items-center justify-between px-2">
                         <h4 className="text-[10px] font-black uppercase tracking-widest opacity-40 flex items-center gap-2"><FileText className="w-4 h-4" /> Repositorio de Documentos Contractuales</h4>
@@ -480,7 +484,16 @@ const InstitutionsModule: React.FC<Props> = ({ isDark, currentUser }) => {
                         )}
                       </div>
                     </div>
-                  )}
+                  ) : viewMode === 'profiles' ? (
+                    <InstitutionProfilesView
+                      institutionId={selectedInstId!}
+                      isDark={isDark}
+                      allProfiles={allProfiles}
+                      onAssignProfile={async (profileId) => {
+                        await assignRCDProfile(profileId, 'institution', selectedInstId!, currentUser.id);
+                      }}
+                    />
+                  ) : null}
                 </div>
               </div>
             ) : (
@@ -798,6 +811,163 @@ const ContractForm = ({ onSubmit, isDark, instId }: any) => {
       >
         Vincular Estructura Contractual
       </button>
+    </div>
+  );
+};
+
+// Institution Profiles View Component - RCD Integration
+const InstitutionProfilesView: React.FC<{
+  institutionId: string;
+  isDark: boolean;
+  allProfiles: any[];
+  onAssignProfile: (profileId: string) => Promise<void>;
+}> = ({ institutionId, isDark, allProfiles, onAssignProfile }) => {
+  const {
+    applicableProfiles,
+    assignedProfiles,
+    hasAssignedProfiles,
+    overallCompliance,
+    isLoading
+  } = useDocumentProfiles('institution', institutionId);
+
+  const [showAssignModal, setShowAssignModal] = useState(false);
+
+  const handleAssign = async (profileId: string) => {
+    await onAssignProfile(profileId);
+    setShowAssignModal(false);
+  };
+
+  // Get profiles that haven't been assigned yet
+  const unassignedProfiles = applicableProfiles.filter(
+    p => !assignedProfiles.some(ap => ap.profile.id === p.id)
+  );
+
+  if (isLoading) {
+    return (
+      <div className="flex-grow flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-grow flex flex-col space-y-6">
+      <div className="flex items-center justify-between px-2">
+        <div>
+          <h4 className="text-[10px] font-black uppercase tracking-widest opacity-40 flex items-center gap-2">
+            <FolderCheck className="w-4 h-4" /> Perfiles Documentales Asignados
+          </h4>
+          {hasAssignedProfiles && (
+            <p className="text-[9px] font-bold opacity-30 mt-1">
+              Cumplimiento General: <span className={`font-black ${overallCompliance >= 80 ? 'text-emerald-600' : overallCompliance >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{overallCompliance}%</span>
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => setShowAssignModal(true)}
+          disabled={unassignedProfiles.length === 0}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all shadow-sm disabled:opacity-30"
+        >
+          <Plus className="w-4 h-4" /> Asignar Perfil
+        </button>
+      </div>
+
+      {!hasAssignedProfiles ? (
+        <div className="flex-grow flex flex-col items-center justify-center border-4 border-dashed border-slate-200 dark:border-slate-800 rounded-[48px] p-16 text-center opacity-30">
+          <Layers className="w-16 h-16 mb-4" />
+          <p className="text-xs font-black uppercase tracking-widest mb-2">Sin Perfiles Asignados</p>
+          <p className="text-[10px] opacity-60 max-w-sm">Asigne perfiles documentales del Repositorio Central para controlar el cumplimiento de esta institución.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+          {assignedProfiles.map(({ profile, assignment, completionPercentage, pendingCount, uploadedCount, verifiedCount }) => (
+            <div
+              key={assignment.id}
+              className={`p-6 rounded-[32px] border transition-all ${isDark ? 'bg-slate-800/30 border-slate-800' : 'bg-slate-50 border-slate-100'}`}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className={`p-3 rounded-xl ${completionPercentage === 100 ? 'bg-emerald-600/10 text-emerald-600' : 'bg-blue-600/10 text-blue-600'}`}>
+                    {completionPercentage === 100 ? <CheckCircle2 className="w-5 h-5" /> : <Layers className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-black uppercase tracking-tight">{profile.name}</h5>
+                    <p className="text-[9px] opacity-40 font-bold">{profile.documentIds.length} documentos requeridos</p>
+                  </div>
+                </div>
+                <span className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase ${completionPercentage === 100 ? 'bg-emerald-600/10 text-emerald-600' :
+                  completionPercentage >= 50 ? 'bg-amber-600/10 text-amber-600' :
+                    'bg-red-600/10 text-red-600'
+                  }`}>
+                  {completionPercentage}%
+                </span>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-4">
+                <div
+                  className={`h-full transition-all ${completionPercentage === 100 ? 'bg-emerald-500' : 'bg-blue-600'}`}
+                  style={{ width: `${completionPercentage}%` }}
+                />
+              </div>
+
+              {/* Status Breakdown */}
+              <div className="flex items-center gap-4 text-[9px] font-bold uppercase">
+                <span className="flex items-center gap-1.5 text-slate-400">
+                  <Clock className="w-3 h-3" /> {pendingCount} pendientes
+                </span>
+                <span className="flex items-center gap-1.5 text-blue-600">
+                  <UploadCloud className="w-3 h-3" /> {uploadedCount} subidos
+                </span>
+                <span className="flex items-center gap-1.5 text-emerald-600">
+                  <CheckCircle2 className="w-3 h-3" /> {verifiedCount} verificados
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Assign Profile Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 z-[75] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xl" onClick={() => setShowAssignModal(false)} />
+          <div className={`relative w-full max-w-xl p-8 rounded-[48px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black uppercase tracking-tight">Asignar Perfil Documental</h3>
+              <button onClick={() => setShowAssignModal(false)} className="p-2 opacity-40 hover:opacity-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {unassignedProfiles.length === 0 ? (
+              <div className="py-12 text-center opacity-40">
+                <p className="text-sm font-bold">Todos los perfiles ya están asignados</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                {unassignedProfiles.map(profile => (
+                  <button
+                    key={profile.id}
+                    onClick={() => handleAssign(profile.id)}
+                    className={`w-full p-6 rounded-[24px] border text-left transition-all hover:border-blue-500 hover:bg-blue-500/5 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-blue-600/10 text-blue-600 rounded-xl">
+                        <Hash className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h5 className="text-sm font-black uppercase tracking-tight">{profile.name}</h5>
+                        <p className="text-[9px] opacity-40">{profile.documentIds?.length || 0} documentos requeridos</p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
