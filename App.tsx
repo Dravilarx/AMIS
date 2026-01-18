@@ -26,7 +26,8 @@ import {
   Settings2,
   Clock,
   BarChart3,
-  CalendarClock
+  CalendarClock,
+  Layers
 } from 'lucide-react';
 import AgrawallModule from './modules/AgrawallModule';
 import HRModule from './modules/HRModule';
@@ -43,6 +44,7 @@ import ShiftsModule from './modules/ShiftsModule';
 import IndicatorsModule from './modules/IndicatorsModule';
 import DoctorAgendaPanel from './modules/DoctorAgendaPanel';
 import WorkHubModule from './modules/WorkHubModule';
+import ControlGestionModule from './modules/ControlGestionModule';
 import { ActiveModule, UserSession, UserRole } from './types';
 import { usePermissions } from './hooks/usePermissions';
 
@@ -85,6 +87,12 @@ const App: React.FC = () => {
         { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
         { id: 'indicators', label: 'Indicadores', icon: BarChart3 },
         { id: 'institutions', label: 'Instituciones', icon: Building2 },
+      ].filter(i => hasAccess(currentUser, i.id as ActiveModule))
+    },
+    {
+      title: "Gestión de Proyectos",
+      items: [
+        { id: 'controlgestion', label: 'Control Gestión', icon: Layers },
       ].filter(i => hasAccess(currentUser, i.id as ActiveModule))
     },
     {
@@ -387,6 +395,7 @@ const App: React.FC = () => {
           {activeModule === 'management' && hasAccess(currentUser, 'management') && <ManagementModule isDark={isDark} currentUser={currentUser} />}
           {activeModule === 'shifts' && hasAccess(currentUser, 'shifts') && <ShiftsModule isDark={isDark} currentUser={currentUser} />}
           {activeModule === 'workhub' && hasAccess(currentUser, 'workhub') && <WorkHubModule isDark={isDark} currentUser={currentUser} />}
+          {activeModule === 'controlgestion' && hasAccess(currentUser, 'controlgestion') && <ControlGestionModule isDark={isDark} />}
         </div>
       </main>
     </div>

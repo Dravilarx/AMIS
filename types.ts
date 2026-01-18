@@ -23,7 +23,8 @@ export type ActiveModule =
   | 'management'
   | 'shifts'
   | 'indicators'
-  | 'workhub';
+  | 'workhub'
+  | 'controlgestion';
 
 export type RolePermissions = Record<UserRole, ActiveModule[]>;
 // ... resto del archivo se mantiene igual
@@ -639,4 +640,75 @@ export interface SignatureDocument {
 
 // Alias para compatibilidad (deprecado)
 export type SignatureStatus = SignatureInstanceStatus;
+
+// ========================================
+// CONTROL GESTIÓN TYPES
+// ========================================
+
+export type CGTaskStatus = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'blocked';
+export type CGTaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface CGRecurrenceRule {
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  interval: number;
+  endDate?: string;
+  daysOfWeek?: number[];
+}
+
+export interface ControlProject {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+  icon?: string;
+  ownerId: string;
+  members: string[];           // Employee IDs
+  customStatuses?: CGTaskStatus[];  // Estados personalizados
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+}
+
+export interface ControlTask {
+  id: string;
+  projectIds: string[];        // Multi-proyecto
+  title: string;
+  description?: string;
+  status: CGTaskStatus;
+  priority: CGTaskPriority;
+  assigneeIds: string[];       // Múltiples asignados
+  dueDate?: string;
+  startDate?: string;
+  tags: string[];
+  parentTaskId?: string;       // Subtareas
+  linkedDocuments: string[];   // RCD document IDs
+  chatThreadId?: string;       // Workhub thread
+  recurrence?: CGRecurrenceRule;
+  order: number;               // Orden dentro de columna
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}
+
+export interface ControlMilestone {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  plannedDate: string;
+  actualDate?: string;
+  status: 'pending' | 'completed' | 'delayed';
+  linkedTaskIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CGTaskComment {
+  id: string;
+  taskId: string;
+  authorId: string;
+  content: string;
+  createdAt: string;
+}
 
