@@ -28,7 +28,16 @@ export const usePermissions = () => {
         if (roleData.length > 0) {
           const permsRecord: any = { ...DEFAULT_PERMISSIONS };
           roleData.forEach((item: any) => {
-            permsRecord[item.role] = item.modules;
+            // Self-healing: Ensure 'signatures' is present if in default
+            let dbModules = Array.isArray(item.modules) ? [...item.modules] : [];
+            const defaultModules = DEFAULT_PERMISSIONS[item.role as UserRole] || [];
+
+            // Auto-patch for new features
+            if (defaultModules.includes('signatures') && !dbModules.includes('signatures')) {
+              dbModules.push('signatures');
+            }
+
+            permsRecord[item.role] = dbModules;
           });
           setPermissions(permsRecord as RolePermissions);
         } else {

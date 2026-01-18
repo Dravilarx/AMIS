@@ -301,6 +301,15 @@ const App: React.FC = () => {
                     color="bg-indigo-700"
                   />
                 )}
+                {hasAccess(currentUser, 'signatures') && (
+                  <DashboardCard
+                    onClick={() => setActiveModule('signatures')}
+                    label="Legal"
+                    val="Firma Digital"
+                    icon={<FileSignature className="w-10 h-10" />}
+                    color="bg-emerald-600"
+                  />
+                )}
                 {hasAccess(currentUser, 'agrawall') && (
                   <DashboardCard
                     onClick={() => setActiveModule('agrawall')}

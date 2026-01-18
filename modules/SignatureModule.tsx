@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useSignatures } from '../hooks/useSignatures';
 import { SignatureDocument, SignatureStatus, UserSession } from '../types';
+import { useEmployees } from '../hooks/useEmployees';
 
 interface Props {
   isDark: boolean;
@@ -431,6 +432,7 @@ const SignatureCaptureModal = ({ isDark, onSave }: any) => {
 };
 
 const CreateDocModal = ({ isDark, onClose, onSave }: any) => {
+  const { employees } = useEmployees();
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -440,6 +442,19 @@ const CreateDocModal = ({ isDark, onClose, onSave }: any) => {
     signerEmail: ''
   });
 
+  const handleEmployeeSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const empId = e.target.value;
+    const emp = employees.find(ep => ep.id === empId);
+    if (emp) {
+      setFormData(prev => ({
+        ...prev,
+        signerName: `${emp.firstName} ${emp.lastName}`,
+        signerRole: emp.role || '',
+        signerEmail: emp.email || ''
+      }));
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-xl" onClick={onClose}>
       <div className={`relative w-full max-w-4xl p-12 rounded-[56px] border animate-in zoom-in-95 duration-300 ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`} onClick={e => e.stopPropagation()}>
@@ -448,25 +463,36 @@ const CreateDocModal = ({ isDark, onClose, onSave }: any) => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
           <div className="col-span-full">
             <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3">Título</label>
-            <input value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`} />
+            <input value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} className={`w-full p-5 rounded-2xl border outline-none font-bold text-slate-900 dark:text-white ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`} placeholder="Ej. Consentimiento Informado..." />
           </div>
+
+          <div className="col-span-full">
+            <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3">Buscar Destinatario (Staff)</label>
+            <select onChange={handleEmployeeSelect} className={`w-full p-5 rounded-2xl border outline-none font-bold text-slate-900 dark:text-white mb-2 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+              <option value="">-- Seleccionar Funcionario --</option>
+              {employees.map(emp => (
+                <option key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName} - {emp.role}</option>
+              ))}
+            </select>
+          </div>
+
           <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3">Firmante</label>
-            <input value={formData.signerName} onChange={e => setFormData({ ...formData, signerName: e.target.value })} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`} />
+            <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3">Nombre Firmante</label>
+            <input value={formData.signerName} onChange={e => setFormData({ ...formData, signerName: e.target.value })} className={`w-full p-5 rounded-2xl border outline-none font-bold text-slate-900 dark:text-white ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`} />
           </div>
           <div>
             <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3">Rol / Cargo</label>
-            <input value={formData.signerRole} onChange={e => setFormData({ ...formData, signerRole: e.target.value })} className={`w-full p-5 rounded-2xl border outline-none font-bold ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`} />
+            <input value={formData.signerRole} onChange={e => setFormData({ ...formData, signerRole: e.target.value })} className={`w-full p-5 rounded-2xl border outline-none font-bold text-slate-900 dark:text-white ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`} />
           </div>
           <div className="col-span-full">
             <label className="block text-[10px] font-black uppercase tracking-widest opacity-40 mb-3">Contenido</label>
-            <textarea value={formData.content} onChange={e => setFormData({ ...formData, content: e.target.value })} className={`w-full p-8 rounded-[40px] border outline-none font-medium h-48 resize-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`} />
+            <textarea value={formData.content} onChange={e => setFormData({ ...formData, content: e.target.value })} className={`w-full p-8 rounded-[40px] border outline-none font-medium h-48 resize-none text-slate-900 dark:text-white ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-100'}`} placeholder="Redacte el contenido del documento o acuerdo..." />
           </div>
         </div>
 
         <div className="flex gap-4">
-          <button onClick={onClose} className="flex-1 py-5 font-black text-xs uppercase opacity-40">Cancelar</button>
-          <button onClick={() => onSave(formData)} className="flex-1 py-5 bg-indigo-600 text-white rounded-[32px] font-black text-xs uppercase tracking-widest">Crear Documento</button>
+          <button onClick={onClose} className="flex-1 py-5 font-black text-xs uppercase opacity-40 hover:opacity-100 transition-opacity">Cancelar</button>
+          <button onClick={() => onSave(formData)} className="flex-1 py-5 bg-indigo-600 text-white rounded-[32px] font-black text-xs uppercase tracking-widest hover:scale-105 transition-transform shadow-lg shadow-indigo-500/30">Crear Documento</button>
         </div>
       </div>
     </div>
