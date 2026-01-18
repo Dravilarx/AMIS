@@ -141,10 +141,10 @@ export const useSignatures = () => {
 
       const newDoc: Omit<SignatureDocument, 'id'> = {
         title: input.title,
-        description: input.description,
+        description: input.description || '',
         origin: input.origin,
-        content: input.content,
-        fileUrl: input.fileUrl,
+        content: input.content || '',
+        fileUrl: input.fileUrl || '',
         hashOriginal,
         status: 'Borrador',
         statusHistory: [{
@@ -161,7 +161,7 @@ export const useSignatures = () => {
         createdAt: now,
         createdBy: input.createdBy,
         updatedAt: now,
-        expiresAt: input.expiresAt
+        ...(input.expiresAt ? { expiresAt: input.expiresAt } : {})
       };
 
       const id = await addDocument(collection, newDoc);
