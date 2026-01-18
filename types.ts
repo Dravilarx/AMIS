@@ -55,7 +55,69 @@ export interface AgrawallAnalysis {
 
 export type LoadingStatus = 'idle' | 'processing' | 'success' | 'error';
 
-// Document & Documentation Types
+// ==================== CENTRAL DOCUMENT REPOSITORY (RCD) ====================
+
+// Document file type categories
+export type DocumentFileType = 'pdf' | 'image' | 'spreadsheet' | 'doc' | 'markdown' | 'cad' | 'text' | 'other';
+export type DocumentCategory = 'Legal' | 'Clínico' | 'Administrativo' | 'Capacitación' | 'Contrato' | 'Técnico' | 'Otro';
+export type DocumentAccessLevel = 'public' | 'restricted' | 'confidential';
+export type DocumentStorageType = 'uploaded' | 'external_link';
+
+// Central Document - Core entity in the RCD
+export interface CentralDocument {
+  id: string;
+  name: string;
+  fileType: DocumentFileType;
+  storageType: DocumentStorageType;
+  fileUrl?: string;              // Firebase Storage URL
+  externalLink?: string;         // For externally hosted documents
+  thumbnailUrl?: string;
+  fileSizeBytes?: number;
+  mimeType?: string;
+  uploadedBy: string;            // userId
+  uploadedAt: string;
+  updatedAt: string;
+  tags: string[];                // Tags for search
+  category: DocumentCategory;
+  description?: string;
+  expiryDate?: string;           // For documents with expiration
+  accessLevel: DocumentAccessLevel;
+}
+
+// Document Profile - Logical grouper for requirements
+export interface RCDDocumentProfile {
+  id: string;
+  name: string;                  // E.g. "Acreditación Médico", "Requisitos Institución Nivel B"
+  description: string;
+  documentIds: string[];         // References to CentralDocument
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  applicableTo: ('employee' | 'institution' | 'system')[];
+}
+
+// Profile Assignment - Links profiles to entities
+export interface ProfileAssignment {
+  id: string;
+  profileId: string;
+  entityType: 'employee' | 'institution';
+  entityId: string;
+  assignedBy: string;
+  assignedAt: string;
+  completionStatus: ProfileCompletionItem[];
+}
+
+export interface ProfileCompletionItem {
+  documentId: string;
+  status: 'pending' | 'uploaded' | 'verified' | 'expired';
+  uploadedAt?: string;
+  verifiedBy?: string;
+  fileUrl?: string;              // Specific file uploaded by this entity
+}
+
+// ==================== LEGACY TYPES (Backward Compatibility) ====================
+
+// @deprecated - Use CentralDocument instead
 export interface DocumentRecord {
   id: string;
   name: string;
@@ -68,6 +130,7 @@ export interface DocumentRecord {
   mandatory: boolean;
 }
 
+// @deprecated - Use RCDDocumentProfile instead
 export interface DocumentProfile {
   id: string;
   name: string;
@@ -75,6 +138,7 @@ export interface DocumentProfile {
   requiredDocs: string[];
 }
 
+// @deprecated - Will be replaced by ProfileAssignment
 export interface EmployeeCompliance {
   id: string;
   employeeId: string;
