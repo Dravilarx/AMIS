@@ -90,7 +90,7 @@ const App: React.FC = () => {
     {
       title: "Operaciones Clínicas",
       items: [
-        { id: 'agrawall', label: 'QA Radiología', icon: ShieldCheck },
+        { id: 'agrawall', label: 'Análisis de Casos', icon: ShieldCheck },
         { id: 'shifts', label: 'Planificación Turnos', icon: Clock },
         { id: 'procedures', label: 'Intervencionismo', icon: Stethoscope },
       ].filter(i => hasAccess(currentUser, i.id as ActiveModule))
@@ -304,7 +304,7 @@ const App: React.FC = () => {
                 {hasAccess(currentUser, 'agrawall') && (
                   <DashboardCard
                     onClick={() => setActiveModule('agrawall')}
-                    label="QA Radiología"
+                    label="Análisis de Casos"
                     val="Auditoría IA"
                     icon={<ShieldCheck className="w-10 h-10" />}
                     color="bg-blue-700"

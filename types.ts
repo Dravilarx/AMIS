@@ -459,3 +459,83 @@ export interface ChatAttachment {
   url: string;
   size?: number;
 }
+
+// ==================== CASE & CLAIM MANAGEMENT (QA) ====================
+
+export type CaseStatus =
+  | 'Nuevo'
+  | 'En Proceso'
+  | 'Pendiente Información'
+  | 'Revisión IA'
+  | 'Resuelto'
+  | 'Cerrado Conforme'
+  | 'Cerrado No Conforme';
+
+export type CaseRequestType =
+  | 'Reclamo de Informe'
+  | 'Revisión Diagnóstica'
+  | 'Consulta Especializada'
+  | 'Caso Discrepancia'
+  | 'Segunda Opinión';
+
+export interface CaseStatusChange {
+  status: CaseStatus;
+  changedAt: string;
+  changedBy: string; // userId
+  notes?: string;
+}
+
+export interface CaseAttachment {
+  id: string;
+  name: string;
+  type: 'informe_pdf' | 'imagen' | 'email' | 'otro';
+  url: string;
+  uploadedAt: string;
+  uploadedBy: string;
+}
+
+export interface CaseRequest {
+  id: string;
+  // Patient Data
+  patientName: string;
+  patientId: string;  // RUT/Passport
+  patientAge?: number;
+  patientGender?: string;
+
+  // Request Details
+  institutionId: string;
+  institutionName: string;
+  requestDate: string; // ISO string
+  requestType: CaseRequestType;
+  description: string;
+  referringPhysicianId?: string;
+  referringPhysicianName?: string;
+
+  // Workflow
+  status: CaseStatus;
+  statusHistory: CaseStatusChange[];
+  assignedToId?: string;
+  assignedToName?: string;
+
+  // Resolution/Closure
+  resolutionDate?: string;
+  resolutionNotes?: string;
+  resolutionResponsibleId?: string;
+  resolutionResponsibleName?: string;
+  resolutionDocumentUrl?: string;
+  closedDate?: string;
+  closedConformance?: boolean;
+
+  // AI Integration
+  linkedAgrawallId?: string;
+  agrawallLevel?: number;
+
+  // Attachments
+  attachments: CaseAttachment[];
+
+  // Metadata
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  nextReminderDate?: string;
+}
