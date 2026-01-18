@@ -542,56 +542,101 @@ export interface CaseRequest {
 
 // ==================== DIGITAL SIGNATURE & LEGAL ====================
 
-export type SignatureStatus = 'Borrador' | 'Pendiente' | 'En Proceso' | 'Firmado' | 'Rechazado' | 'Expirado' | 'Enviado' | 'Visto';
+export type SignatureInstanceStatus =
+  | 'Borrador'
+  | 'Pendiente'
+  | 'EnProceso'
+  | 'Firmado'
+  | 'Rechazado'
+  | 'Expirado';
+
 export type SignatureOrigin = 'Interno_RichText' | 'Externo_PDF';
 
+// Firmante asignado - puede ser de Staff o ingresado manualmente
 export interface SignatureSigner {
-  id: string; // uuid
-  name: string;
+  id: string;
+
+  // Identificación - si employeeId existe, es usuario registrado
+  employeeId?: string;           // FK a employees (si es Staff)
+  isManualEntry: boolean;        // true = ingresado manualmente
+
+  // Datos del firmante
+  fullName: string;
   email: string;
   role?: string;
-  order: number;
+
+  // Orden y estado
+  order: number;                 // 1, 2, 3... para secuencial
   status: 'Pendiente' | 'Firmado' | 'Rechazado';
+
+  // Seguridad
+  accessToken?: string;          // JWT simulado de un solo uso
+  tokenExpiresAt?: string;
+
+  // Trazabilidad de firma
   signedAt?: string;
-  signatureData?: string; // Base64 PNG/SVG
   ipAddress?: string;
-  accessToken?: string; // JWT simulation
-  certificateId?: string; // Mock for now
+  signatureData?: string;        // Base64 PNG de firma manuscrita
+  rejectionReason?: string;      // Motivo si rechaza
 }
 
+// Evidencia digital para auditoría
 export interface SignatureEvidence {
   id: string;
   signerId: string;
+  instanceId: string;
   timestamp: string;
-  event: 'created' | 'viewed' | 'signed' | 'rejected' | 'completed';
-  ip: string;
+  event: 'created' | 'sent' | 'viewed' | 'signed' | 'rejected' | 'expired' | 'completed';
+  ipAddress: string;
   detail: string;
-  hashSnapshot: string; // SHA-256 of document state at this point
+  hashSnapshot: string;          // SHA-256 del documento en este momento
 }
 
+// Cambio de estado para historial
+export interface SignatureStatusChange {
+  status: SignatureInstanceStatus;
+  changedAt: string;
+  changedBy: string;
+  notes?: string;
+}
+
+// Instancia de firma (documento principal)
 export interface SignatureDocument {
   id: string;
   title: string;
   description?: string;
-  content?: string; // Rich Text content if internal
-  fileUrl?: string; // PDF URL if external or generated
+
+  // Contenido según origen
   origin: SignatureOrigin;
-  currentHash: string; // Current SHA-256 hash of the doc
-  
-  status: SignatureStatus;
+  content?: string;              // Rich Text HTML si es interno
+  fileUrl?: string;              // URL del PDF si es externo
+  finalPdfUrl?: string;          // PDF final con firmas estampadas
+
+  // Integridad
+  hashOriginal: string;          // SHA-256 antes de firmas
+  hashFinal?: string;            // SHA-256 después de todas las firmas
+
+  // Estado y workflow
+  status: SignatureInstanceStatus;
+  statusHistory: SignatureStatusChange[];
+
+  // Firmantes
+  signers: SignatureSigner[];
+  requiredSignatures: number;
+  completedSignatures: number;
+  isSequential: boolean;         // true = orden obligatorio
+
+  // Evidencia
+  evidenceLog: SignatureEvidence[];
+
+  // Metadata
   createdAt: string;
   createdBy: string;
   updatedAt: string;
   expiresAt?: string;
-
-  signers: SignatureSigner[];
-  evidenceLog: SignatureEvidence[];
-  
-  // Backward compatibility // fields mentioned in previous useSignatures.ts
-  signerName?: string; 
-  signerRole?: string;
-  signerEmail?: string;
-  viewedAt?: string;
-  signedAt?: string;
-  signatureData?: string;
+  completedAt?: string;
 }
+
+// Alias para compatibilidad (deprecado)
+export type SignatureStatus = SignatureInstanceStatus;
+

@@ -1,214 +1,395 @@
 import { useState, useEffect } from 'react';
-import { SignatureDocument, SignatureStatus, SignatureSigner, SignatureEvidence } from '../types';
+import {
+  SignatureDocument,
+  SignatureInstanceStatus,
+  SignatureSigner,
+  SignatureEvidence,
+  SignatureStatusChange
+} from '../types';
 import { addDocument, getDocuments, updateDocument, deleteDocument } from '../services/firestoreService';
-
-// Initial Mock Data
-const INITIAL_SIGNATURE_DOCS: SignatureDocument[] = [
-  {
-    id: 'sig-1',
-    title: 'Consentimiento Teleradiología 2025',
-    description: 'Protocolo de confidencialidad y tratamiento de datos para staff médico.',
-    content: 'Por la presente, el profesional declara conocer y aceptar los protocolos de seguridad de la red AMIS...',
-    origin: 'Interno_RichText',
-    currentHash: 'a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e',
-    status: 'Enviado',
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000).toISOString(),
-    createdBy: 'admin-1',
-    signers: [
-      {
-        id: 'signer-1',
-        name: 'Dr. Julián Riquelme',
-        email: 'j.riquelme@amis.health',
-        role: 'Neurorradiólogo',
-        order: 1,
-        status: 'Pendiente'
-      }
-    ],
-    evidenceLog: [],
-    // Legacy mapping
-    signerName: 'Dr. Julián Riquelme',
-    signerRole: 'Neurorradiólogo',
-    signerEmail: 'j.riquelme@amis.health'
-  },
-  {
-    id: 'sig-2',
-    title: 'Acuerdo de Honorarios Extraordinarios',
-    description: 'Ajuste de tarifas para turnos festivos y emergencias.',
-    content: 'Se acuerda un incremento del 20% en la tarifa base para lecturas realizadas en días festivos...',
-    origin: 'Interno_RichText',
-    currentHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    status: 'Pendiente',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    createdBy: 'admin-1',
-    signers: [
-      {
-        id: 'signer-2',
-        name: 'Administración AMIS',
-        email: 'admin@amis.health',
-        role: 'Dirección Médica',
-        order: 1,
-        status: 'Pendiente'
-      }
-    ],
-    evidenceLog: [],
-    // Legacy mapping
-    signerName: 'Administración AMIS',
-    signerRole: 'Dirección Médica',
-    signerEmail: 'admin@amis.health'
-  }
-];
 
 // Helper for SHA-256
 async function generateHash(content: string): Promise<string> {
   try {
     const encoder = new TextEncoder();
-    const data = encoder.encode(content + new Date().toISOString()); // Add randomness
+    const data = encoder.encode(content);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   } catch (e) {
-    return 'hash-gen-error-' + Date.now();
+    console.error('Hash generation error:', e);
+    return 'hash-error-' + Date.now();
   }
+}
+
+// Generate simple access token (simulated JWT)
+function generateAccessToken(): string {
+  return btoa(crypto.randomUUID() + '.' + Date.now());
+}
+
+// Initial data with new structure
+const INITIAL_DOCS: SignatureDocument[] = [
+  {
+    id: 'sig-demo-1',
+    title: 'Consentimiento Teleradiología 2025',
+    description: 'Protocolo de confidencialidad para staff médico.',
+    origin: 'Interno_RichText',
+    content: 'Por la presente, el profesional declara conocer y aceptar los protocolos de seguridad de la red AMIS. Se compromete a mantener la confidencialidad de toda información clínica y personal de los pacientes...',
+    hashOriginal: '',
+    status: 'Borrador',
+    statusHistory: [],
+    signers: [],
+    requiredSignatures: 0,
+    completedSignatures: 0,
+    isSequential: false,
+    evidenceLog: [],
+    createdAt: new Date().toISOString(),
+    createdBy: 'admin-1',
+    updatedAt: new Date().toISOString()
+  }
+];
+
+export interface CreateDocumentInput {
+  title: string;
+  description?: string;
+  origin: 'Interno_RichText' | 'Externo_PDF';
+  content?: string;
+  fileUrl?: string;
+  signers: SignerInput[];
+  isSequential: boolean;
+  expiresAt?: string;
+  createdBy: string;
+}
+
+export interface SignerInput {
+  employeeId?: string;
+  fullName: string;
+  email: string;
+  role?: string;
+  order: number;
 }
 
 export const useSignatures = () => {
   const [documents, setDocuments] = useState<SignatureDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const collection = 'signature_documents';
+  const collection = 'signature_instances';
 
+  // Load documents
   useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        let data = await getDocuments<SignatureDocument>(collection, 'createdAt');
-        if (data.length === 0) {
-          console.log('No signature documents found, seeding...');
-          for (const doc of INITIAL_SIGNATURE_DOCS) {
-            await addDocument(collection, doc);
-          }
-          data = await getDocuments<SignatureDocument>(collection, 'createdAt');
-        }
-        setDocuments(data);
-        setError(null);
-      } catch (err) {
-        console.error('Error loading signature documents:', err);
-        setError('Failed to load signature data');
-        setDocuments(INITIAL_SIGNATURE_DOCS);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    loadDocuments();
   }, []);
 
-  const createDocument = async (docData: any) => {
+  const loadDocuments = async () => {
     try {
-      const initialHash = await generateHash(docData.content || docData.title);
+      setLoading(true);
+      let data = await getDocuments<SignatureDocument>(collection, 'createdAt');
+
+      // Seed initial data if empty
+      if (data.length === 0) {
+        console.log('Seeding signature documents...');
+        for (const doc of INITIAL_DOCS) {
+          const hash = await generateHash(doc.content || doc.title);
+          await addDocument(collection, { ...doc, hashOriginal: hash });
+        }
+        data = await getDocuments<SignatureDocument>(collection, 'createdAt');
+      }
+
+      setDocuments(data);
+      setError(null);
+    } catch (err) {
+      console.error('Error loading signatures:', err);
+      setError('Error al cargar documentos de firma');
+      setDocuments([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Create new document with signers
+  const createDocument = async (input: CreateDocumentInput): Promise<SignatureDocument> => {
+    try {
+      const now = new Date().toISOString();
+      const contentToHash = input.content || input.fileUrl || input.title;
+      const hashOriginal = await generateHash(contentToHash);
+
+      // Build signers array
+      const signers: SignatureSigner[] = input.signers.map(s => ({
+        id: crypto.randomUUID(),
+        employeeId: s.employeeId,
+        isManualEntry: !s.employeeId,
+        fullName: s.fullName,
+        email: s.email,
+        role: s.role,
+        order: s.order,
+        status: 'Pendiente',
+        accessToken: generateAccessToken(),
+        tokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+      }));
+
+      // Initial evidence
+      const evidence: SignatureEvidence = {
+        id: crypto.randomUUID(),
+        signerId: 'system',
+        instanceId: '',
+        timestamp: now,
+        event: 'created',
+        ipAddress: '0.0.0.0',
+        detail: `Documento creado con ${signers.length} firmante(s) asignado(s)`,
+        hashSnapshot: hashOriginal
+      };
 
       const newDoc: Omit<SignatureDocument, 'id'> = {
-        title: docData.title,
-        description: docData.description,
-        content: docData.content,
-        origin: 'Interno_RichText', // Defaulting for now
-        currentHash: initialHash,
-        status: 'Pendiente',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        createdBy: 'current-user', // Should be passed
-        signers: [{
-          id: crypto.randomUUID(),
-          name: docData.signerName,
-          email: docData.signerEmail,
-          role: docData.signerRole,
-          order: 1,
-          status: 'Pendiente'
+        title: input.title,
+        description: input.description,
+        origin: input.origin,
+        content: input.content,
+        fileUrl: input.fileUrl,
+        hashOriginal,
+        status: 'Borrador',
+        statusHistory: [{
+          status: 'Borrador',
+          changedAt: now,
+          changedBy: input.createdBy,
+          notes: 'Documento creado'
         }],
-        evidenceLog: [{
-          id: crypto.randomUUID(),
-          signerId: 'system',
-          timestamp: new Date().toISOString(),
-          event: 'created',
-          ip: '127.0.0.1', // Mock IP
-          detail: 'Documento creado y hash generado',
-          hashSnapshot: initialHash
-        }],
-        // Legacy compat
-        signerName: docData.signerName,
-        signerRole: docData.signerRole
+        signers,
+        requiredSignatures: signers.length,
+        completedSignatures: 0,
+        isSequential: input.isSequential,
+        evidenceLog: [evidence],
+        createdAt: now,
+        createdBy: input.createdBy,
+        updatedAt: now,
+        expiresAt: input.expiresAt
       };
 
       const id = await addDocument(collection, newDoc);
-      const entryWithId = { ...newDoc, id } as SignatureDocument;
-      setDocuments(prev => [entryWithId, ...prev]);
-      return entryWithId;
+      const docWithId = { ...newDoc, id } as SignatureDocument;
+
+      setDocuments(prev => [docWithId, ...prev]);
+      return docWithId;
     } catch (err) {
-      console.error('Error creating signature document:', err);
+      console.error('Error creating document:', err);
       throw err;
     }
   };
 
-  const updateStatus = async (id: string, status: SignatureStatus, extraData: any = {}) => {
-    try {
-      // Find current doc to update evidence
-      const currentDoc = documents.find(d => d.id === id);
-      if (!currentDoc) return;
+  // Send document for signing (Borrador → Pendiente)
+  const sendForSigning = async (docId: string, userId: string) => {
+    const doc = documents.find(d => d.id === docId);
+    if (!doc || doc.status !== 'Borrador') return;
 
-      const newHash = await generateHash(currentDoc.content || '' + status);
-
-      const evidenceEntry: SignatureEvidence = {
+    const now = new Date().toISOString();
+    const updates: Partial<SignatureDocument> = {
+      status: 'Pendiente',
+      updatedAt: now,
+      statusHistory: [...doc.statusHistory, {
+        status: 'Pendiente',
+        changedAt: now,
+        changedBy: userId,
+        notes: 'Documento enviado a firmar'
+      }],
+      evidenceLog: [...doc.evidenceLog, {
         id: crypto.randomUUID(),
-        signerId: currentDoc.signers[0]?.id || 'unknown',
-        timestamp: new Date().toISOString(),
-        event: status === 'Firmado' ? 'signed' : status === 'Visto' ? 'viewed' : 'rejected',
-        ip: '192.168.1.1', // Mock
-        detail: status === 'Firmado' ? 'Firma aplicada correctamente' : 'Estado actualizado a ' + status,
-        hashSnapshot: newHash
-      };
+        signerId: 'system',
+        instanceId: doc.id,
+        timestamp: now,
+        event: 'sent',
+        ipAddress: '0.0.0.0',
+        detail: 'Notificaciones enviadas a firmantes',
+        hashSnapshot: doc.hashOriginal
+      }]
+    };
 
-      const updates: any = {
-        status,
-        updatedAt: new Date().toISOString(),
-        evidenceLog: [...(currentDoc.evidenceLog || []), evidenceEntry],
-        ...extraData
-      };
+    await updateDocument(collection, docId, updates);
+    setDocuments(prev => prev.map(d => d.id === docId ? { ...d, ...updates } : d));
+  };
 
-      if (status === 'Visto') updates.viewedAt = new Date().toISOString();
-      if (status === 'Firmado') {
-        updates.signedAt = new Date().toISOString();
-        updates.currentHash = newHash;
-        // Update signer status
-        if (currentDoc.signers.length > 0) {
-          const updatedSigners = [...currentDoc.signers];
-          updatedSigners[0] = {
-            ...updatedSigners[0],
-            status: 'Firmado',
-            signedAt: new Date().toISOString(),
-            signatureData: extraData.signatureData
-          };
-          updates.signers = updatedSigners;
-        }
+  // Apply signature from a signer
+  const applySignature = async (
+    docId: string,
+    signerId: string,
+    signatureData: string,
+    ipAddress: string = '0.0.0.0'
+  ) => {
+    const doc = documents.find(d => d.id === docId);
+    if (!doc) return;
+
+    const signer = doc.signers.find(s => s.id === signerId);
+    if (!signer || signer.status !== 'Pendiente') return;
+
+    // Check sequential order
+    if (doc.isSequential) {
+      const pendingBefore = doc.signers.filter(s => s.order < signer.order && s.status === 'Pendiente');
+      if (pendingBefore.length > 0) {
+        throw new Error('Debe esperar a que firmen los firmantes anteriores');
       }
-
-      await updateDocument<SignatureDocument>(collection, id, updates);
-      setDocuments(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
-    } catch (err) {
-      console.error('Error updating signature status:', err);
-      throw err;
     }
+
+    const now = new Date().toISOString();
+    const newHash = await generateHash((doc.content || '') + signatureData + now);
+
+    // Update signer
+    const updatedSigners = doc.signers.map(s =>
+      s.id === signerId
+        ? { ...s, status: 'Firmado' as const, signedAt: now, signatureData, ipAddress }
+        : s
+    );
+
+    const newCompletedCount = updatedSigners.filter(s => s.status === 'Firmado').length;
+    const allSigned = newCompletedCount === doc.requiredSignatures;
+
+    const newStatus: SignatureInstanceStatus = allSigned ? 'Firmado' : 'EnProceso';
+
+    const updates: Partial<SignatureDocument> = {
+      signers: updatedSigners,
+      completedSignatures: newCompletedCount,
+      status: newStatus,
+      updatedAt: now,
+      statusHistory: [...doc.statusHistory, {
+        status: newStatus,
+        changedAt: now,
+        changedBy: signerId,
+        notes: allSigned ? 'Todas las firmas completadas' : `Firma aplicada por ${signer.fullName}`
+      }],
+      evidenceLog: [...doc.evidenceLog, {
+        id: crypto.randomUUID(),
+        signerId,
+        instanceId: doc.id,
+        timestamp: now,
+        event: allSigned ? 'completed' : 'signed',
+        ipAddress,
+        detail: `Firma aplicada por ${signer.fullName}`,
+        hashSnapshot: newHash
+      }],
+      ...(allSigned && { hashFinal: newHash, completedAt: now })
+    };
+
+    await updateDocument(collection, docId, updates);
+    setDocuments(prev => prev.map(d => d.id === docId ? { ...d, ...updates } : d));
   };
 
-  const deleteDocumentHandler = async (id: string) => {
-    try {
-      await deleteDocument(collection, id);
-      setDocuments(prev => prev.filter(d => d.id !== id));
-    } catch (err) {
-      console.error('Error deleting signature document:', err);
-      throw err;
-    }
+  // Reject signature
+  const rejectSignature = async (
+    docId: string,
+    signerId: string,
+    reason: string,
+    ipAddress: string = '0.0.0.0'
+  ) => {
+    const doc = documents.find(d => d.id === docId);
+    if (!doc) return;
+
+    const signer = doc.signers.find(s => s.id === signerId);
+    if (!signer) return;
+
+    const now = new Date().toISOString();
+
+    const updatedSigners = doc.signers.map(s =>
+      s.id === signerId
+        ? { ...s, status: 'Rechazado' as const, rejectionReason: reason }
+        : s
+    );
+
+    const updates: Partial<SignatureDocument> = {
+      signers: updatedSigners,
+      status: 'Rechazado',
+      updatedAt: now,
+      statusHistory: [...doc.statusHistory, {
+        status: 'Rechazado',
+        changedAt: now,
+        changedBy: signerId,
+        notes: `Rechazado por ${signer.fullName}: ${reason}`
+      }],
+      evidenceLog: [...doc.evidenceLog, {
+        id: crypto.randomUUID(),
+        signerId,
+        instanceId: doc.id,
+        timestamp: now,
+        event: 'rejected',
+        ipAddress,
+        detail: `Rechazado: ${reason}`,
+        hashSnapshot: doc.hashOriginal
+      }]
+    };
+
+    await updateDocument(collection, docId, updates);
+    setDocuments(prev => prev.map(d => d.id === docId ? { ...d, ...updates } : d));
   };
 
-  return { documents, loading, error, createDocument, updateStatus, deleteDocument: deleteDocumentHandler };
+  // Add signer to draft document
+  const addSigner = async (docId: string, signer: SignerInput) => {
+    const doc = documents.find(d => d.id === docId);
+    if (!doc || doc.status !== 'Borrador') return;
+
+    const newSigner: SignatureSigner = {
+      id: crypto.randomUUID(),
+      employeeId: signer.employeeId,
+      isManualEntry: !signer.employeeId,
+      fullName: signer.fullName,
+      email: signer.email,
+      role: signer.role,
+      order: signer.order,
+      status: 'Pendiente',
+      accessToken: generateAccessToken(),
+      tokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    };
+
+    const updates: Partial<SignatureDocument> = {
+      signers: [...doc.signers, newSigner],
+      requiredSignatures: doc.requiredSignatures + 1,
+      updatedAt: new Date().toISOString()
+    };
+
+    await updateDocument(collection, docId, updates);
+    setDocuments(prev => prev.map(d => d.id === docId ? { ...d, ...updates } : d));
+  };
+
+  // Remove signer from draft
+  const removeSigner = async (docId: string, signerId: string) => {
+    const doc = documents.find(d => d.id === docId);
+    if (!doc || doc.status !== 'Borrador') return;
+
+    const updates: Partial<SignatureDocument> = {
+      signers: doc.signers.filter(s => s.id !== signerId),
+      requiredSignatures: Math.max(0, doc.requiredSignatures - 1),
+      updatedAt: new Date().toISOString()
+    };
+
+    await updateDocument(collection, docId, updates);
+    setDocuments(prev => prev.map(d => d.id === docId ? { ...d, ...updates } : d));
+  };
+
+  // Delete document
+  const deleteDoc = async (docId: string) => {
+    await deleteDocument(collection, docId);
+    setDocuments(prev => prev.filter(d => d.id !== docId));
+  };
+
+  // Get documents by status
+  const getByStatus = (status: SignatureInstanceStatus) =>
+    documents.filter(d => d.status === status);
+
+  // Get pending for specific signer email
+  const getPendingForSigner = (email: string) =>
+    documents.filter(d =>
+      d.status !== 'Borrador' &&
+      d.signers.some(s => s.email === email && s.status === 'Pendiente')
+    );
+
+  return {
+    documents,
+    loading,
+    error,
+    createDocument,
+    sendForSigning,
+    applySignature,
+    rejectSignature,
+    addSigner,
+    removeSigner,
+    deleteDocument: deleteDoc,
+    getByStatus,
+    getPendingForSigner,
+    reload: loadDocuments
+  };
 };
