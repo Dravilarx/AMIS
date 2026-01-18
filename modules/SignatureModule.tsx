@@ -275,10 +275,13 @@ const DocumentsList = ({ documents, isDark, searchTerm, onSearchChange, statusFi
   </div>
 );
 
-// Create Wizard
+// Create Wizard with Signature Positioning
 const CreateWizard = ({ isDark, currentUser, onComplete, onCancel }: any) => {
   const { employees } = useEmployees();
   const [step, setStep] = useState(1);
+  const [dragOver, setDragOver] = useState(false);
+  const positionPreviewRef = useRef<HTMLDivElement>(null);
+  const [draggingSignerIdx, setDraggingSignerIdx] = useState<number | null>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -289,34 +292,62 @@ const CreateWizard = ({ isDark, currentUser, onComplete, onCancel }: any) => {
     isSequential: false
   });
 
-  const [signers, setSigners] = useState<SignerInput[]>([]);
-  const [newSigner, setNewSigner] = useState({ fullName: '', email: '', role: '', isManual: false });
+  // Signers with position data
+  const [signers, setSigners] = useState<(SignerInput & { position?: { x: number; y: number } })[]>([]);
+  const [newSigner, setNewSigner] = useState({ fullName: '', email: '', role: '' });
 
   const addSignerFromEmployee = (empId: string) => {
     const emp = employees.find(e => e.id === empId);
     if (!emp) return;
+    const defaultPositions = [{ x: 15, y: 75 }, { x: 55, y: 75 }, { x: 15, y: 88 }, { x: 55, y: 88 }];
     setSigners(prev => [...prev, {
       employeeId: emp.id,
       fullName: `${emp.firstName} ${emp.lastName}`,
       email: emp.email,
       role: emp.role,
-      order: prev.length + 1
+      order: prev.length + 1,
+      position: defaultPositions[prev.length % 4]
     }]);
   };
 
   const addManualSigner = () => {
     if (!newSigner.fullName || !newSigner.email) return;
+    const defaultPositions = [{ x: 15, y: 75 }, { x: 55, y: 75 }, { x: 15, y: 88 }, { x: 55, y: 88 }];
     setSigners(prev => [...prev, {
       fullName: newSigner.fullName,
       email: newSigner.email,
       role: newSigner.role,
-      order: prev.length + 1
+      order: prev.length + 1,
+      position: defaultPositions[prev.length % 4]
     }]);
-    setNewSigner({ fullName: '', email: '', role: '', isManual: false });
+    setNewSigner({ fullName: '', email: '', role: '' });
   };
 
   const removeSigner = (idx: number) => {
     setSigners(prev => prev.filter((_, i) => i !== idx).map((s, i) => ({ ...s, order: i + 1 })));
+  };
+
+  // Handle drag position for signer
+  const handlePositionDrag = (e: React.MouseEvent, idx: number) => {
+    if (!positionPreviewRef.current) return;
+    const rect = positionPreviewRef.current.getBoundingClientRect();
+    const x = Math.max(5, Math.min(85, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(10, Math.min(92, ((e.clientY - rect.top) / rect.height) * 100));
+    setSigners(prev => prev.map((s, i) => i === idx ? { ...s, position: { x, y } } : s));
+  };
+
+  // Handle file drop
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file && file.type === 'application/pdf') {
+      // Create a blob URL for the PDF
+      const url = URL.createObjectURL(file);
+      setFormData(prev => ({ ...prev, fileUrl: url, origin: 'Externo_PDF' }));
+    } else {
+      alert('Por favor arrastre un archivo PDF');
+    }
   };
 
   const handleSubmit = async () => {
@@ -335,17 +366,18 @@ const CreateWizard = ({ isDark, currentUser, onComplete, onCancel }: any) => {
 
   const inputClass = `w-full p-4 rounded-xl border outline-none ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-100 text-slate-900'}`;
   const labelClass = 'block text-[9px] font-black uppercase tracking-widest opacity-40 mb-2';
+  const totalSteps = 4;
 
   return (
     <div className={`p-8 rounded-[40px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
       {/* Progress */}
       <div className="flex items-center gap-2 mb-8">
-        {[1, 2, 3].map(s => (
+        {[1, 2, 3, 4].map(s => (
           <div key={s} className="flex items-center gap-2">
             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black ${step >= s ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
               {s}
             </div>
-            {s < 3 && <div className={`w-12 h-0.5 ${step > s ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'}`} />}
+            {s < 4 && <div className={`w-8 h-0.5 ${step > s ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'}`} />}
           </div>
         ))}
         <span className="ml-4 text-xs font-bold opacity-60">
@@ -412,12 +444,28 @@ const CreateWizard = ({ isDark, currentUser, onComplete, onCancel }: any) => {
 
           {formData.origin === 'Externo_PDF' && (
             <div>
-              <label className={labelClass}>URL del PDF (o arrastrar archivo)</label>
+              <label className={labelClass}>Subir PDF</label>
+              <div
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                className={`p-8 rounded-xl border-2 border-dashed text-center transition-all cursor-pointer ${dragOver ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30' : 'border-slate-300 dark:border-slate-600'}`}
+              >
+                <Upload className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                <p className="text-sm font-bold">Arrastre un PDF aquí</p>
+                <p className="text-xs opacity-50 mt-1">o ingrese URL abajo</p>
+              </div>
+              {formData.fileUrl && (
+                <div className="mt-3 p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg flex items-center justify-between">
+                  <span className="text-xs text-emerald-700 dark:text-emerald-300">✓ PDF cargado</span>
+                  <button onClick={() => setFormData(prev => ({ ...prev, fileUrl: '' }))} className="text-red-500 text-xs">Quitar</button>
+                </div>
+              )}
               <input
-                value={formData.fileUrl}
+                value={formData.fileUrl.startsWith('blob:') ? '' : formData.fileUrl}
                 onChange={e => setFormData(prev => ({ ...prev, fileUrl: e.target.value }))}
-                className={inputClass}
-                placeholder="https://..."
+                className={`${inputClass} mt-3`}
+                placeholder="O pegue URL del PDF..."
               />
             </div>
           )}
@@ -515,8 +563,51 @@ const CreateWizard = ({ isDark, currentUser, onComplete, onCancel }: any) => {
         </div>
       )}
 
-      {/* Step 3: Confirm */}
+      {/* Step 3: Position Signatures */}
       {step === 3 && (
+        <div className="space-y-4">
+          <p className="text-sm opacity-60 text-center">Arrastre cada recuadro para posicionar donde irá cada firma</p>
+
+          <div
+            ref={positionPreviewRef}
+            className="bg-white rounded-2xl shadow-lg p-6 min-h-[500px] relative border border-slate-200"
+            style={{ fontFamily: 'serif' }}
+            onMouseMove={(e) => draggingSignerIdx !== null && handlePositionDrag(e, draggingSignerIdx)}
+            onMouseUp={() => setDraggingSignerIdx(null)}
+            onMouseLeave={() => setDraggingSignerIdx(null)}
+          >
+            {/* Document Preview */}
+            <div className="text-center mb-4 pb-3 border-b border-slate-200">
+              <h1 className="text-lg font-bold text-slate-800">{formData.title || 'Título del Documento'}</h1>
+            </div>
+            <div className="text-slate-600 text-xs leading-relaxed">
+              {formData.content?.substring(0, 400) || 'Contenido del documento...'}
+              {formData.content?.length > 400 && '...'}
+            </div>
+
+            {/* Draggable Signature Positions */}
+            {signers.map((s, idx) => (
+              <div
+                key={idx}
+                className={`absolute border-2 border-dashed rounded-lg p-2 cursor-move transition-all ${draggingSignerIdx === idx ? 'border-indigo-500 bg-indigo-50 shadow-lg z-10' : 'border-amber-400 bg-amber-50/80'}`}
+                style={{
+                  left: `${s.position?.x || 20}%`,
+                  top: `${s.position?.y || 70}%`,
+                  width: '130px',
+                  transform: 'translate(-50%, -50%)'
+                }}
+                onMouseDown={() => setDraggingSignerIdx(idx)}
+              >
+                <PenTool className="w-4 h-4 mx-auto text-amber-600" />
+                <p className="text-[7px] text-amber-700 font-bold text-center truncate">{s.fullName}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Step 4: Confirm */}
+      {step === 4 && (
         <div className="space-y-6">
           <div className={`p-6 rounded-xl border ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
             <h4 className="font-black uppercase text-sm mb-4">Resumen</h4>
@@ -540,7 +631,7 @@ const CreateWizard = ({ isDark, currentUser, onComplete, onCancel }: any) => {
         <button onClick={step === 1 ? onCancel : () => setStep(s => s - 1)} className="px-6 py-3 opacity-50 hover:opacity-100 text-sm font-bold">
           {step === 1 ? 'Cancelar' : '← Anterior'}
         </button>
-        {step < 3 ? (
+        {step < totalSteps ? (
           <button
             onClick={() => setStep(s => s + 1)}
             disabled={(step === 1 && !formData.title) || (step === 2 && signers.length === 0)}
@@ -565,61 +656,115 @@ const DocumentDetail = ({ doc, isDark, onSendForSigning, onOpenSignPanel, onDele
 
   // Download the signed document as image
   const downloadSignedDocument = async () => {
-    if (!previewRef.current) return;
     setDownloading(true);
 
     try {
-      // Use html2canvas-like approach with native canvas
-      const preview = previewRef.current;
       const canvas = document.createElement('canvas');
-      const scale = 2; // High resolution
-      canvas.width = preview.offsetWidth * scale;
-      canvas.height = preview.offsetHeight * scale;
+      const width = 800;
+      const height = 1100;
+      canvas.width = width * 2;
+      canvas.height = height * 2;
 
       const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      if (!ctx) throw new Error('No canvas context');
 
-      ctx.scale(scale, scale);
+      ctx.scale(2, 2);
+
+      // Background
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, width, height);
 
-      // Draw document content
+      // Border
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(30, 30, width - 60, height - 60);
+
+      // Header
       ctx.fillStyle = '#1e293b';
-      ctx.font = 'bold 24px Inter, sans-serif';
-      ctx.fillText(doc.title, 40, 50);
+      ctx.font = 'bold 28px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(doc.title, width / 2, 80);
 
-      ctx.font = '14px Inter, sans-serif';
-      ctx.fillStyle = '#64748b';
-      const lines = (doc.content || '').split('\n');
-      let y = 90;
-      for (const line of lines) {
-        ctx.fillText(line, 40, y);
-        y += 24;
+      if (doc.description) {
+        ctx.font = '14px Arial, sans-serif';
+        ctx.fillStyle = '#64748b';
+        ctx.fillText(doc.description, width / 2, 105);
       }
+
+      // Divider
+      ctx.beginPath();
+      ctx.moveTo(60, 130);
+      ctx.lineTo(width - 60, 130);
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.stroke();
+
+      // Content with word wrap
+      ctx.textAlign = 'left';
+      ctx.font = '14px Arial, sans-serif';
+      ctx.fillStyle = '#334155';
+
+      const content = doc.content || 'Documento PDF adjunto';
+      const maxWidth = width - 120;
+      const words = content.split(' ');
+      let line = '';
+      let y = 160;
+      const lineHeight = 22;
+
+      for (const word of words) {
+        const testLine = line + word + ' ';
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && line !== '') {
+          ctx.fillText(line.trim(), 60, y);
+          line = word + ' ';
+          y += lineHeight;
+          if (y > 600) break; // Limit content height
+        } else {
+          line = testLine;
+        }
+      }
+      if (line && y <= 600) {
+        ctx.fillText(line.trim(), 60, y);
+      }
+
+      // Signatures section header
+      ctx.beginPath();
+      ctx.moveTo(60, 650);
+      ctx.lineTo(width - 60, 650);
+      ctx.stroke();
+
+      ctx.font = 'bold 12px Arial, sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText('FIRMAS', 60, 680);
 
       // Draw signatures
       const signedSigners = doc.signers.filter((s: any) => s.status === 'Firmado' && s.signatureData);
-      let sigY = y + 40;
+      const sigWidth = 320;
+      const sigHeight = 120;
+      let sigX = 60;
+      let sigY = 700;
 
-      for (const signer of signedSigners) {
-        // Draw signature box
-        ctx.strokeStyle = '#e2e8f0';
+      for (let i = 0; i < signedSigners.length; i++) {
+        const signer = signedSigners[i];
+
+        // Position calculation (2 per row)
+        if (i > 0 && i % 2 === 0) {
+          sigX = 60;
+          sigY += sigHeight + 20;
+        } else if (i % 2 === 1) {
+          sigX = width / 2 + 20;
+        }
+
+        // Signature box
+        ctx.strokeStyle = '#cbd5e1';
         ctx.lineWidth = 1;
-        ctx.strokeRect(40, sigY, 300, 100);
-
-        // Draw signature label
-        ctx.fillStyle = '#64748b';
-        ctx.font = '10px Inter, sans-serif';
-        ctx.fillText(signer.fullName, 50, sigY + 90);
-        ctx.fillText(new Date(signer.signedAt).toLocaleDateString(), 250, sigY + 90);
+        ctx.strokeRect(sigX, sigY, sigWidth, sigHeight);
 
         // Draw signature image
         if (signer.signatureData) {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
           await new Promise<void>((resolve) => {
+            const img = new Image();
             img.onload = () => {
-              ctx.drawImage(img, 50, sigY + 10, 240, 70);
+              ctx.drawImage(img, sigX + 10, sigY + 5, sigWidth - 20, 70);
               resolve();
             };
             img.onerror = () => resolve();
@@ -627,13 +772,38 @@ const DocumentDetail = ({ doc, isDark, onSendForSigning, onOpenSignPanel, onDele
           });
         }
 
-        sigY += 120;
+        // Signature line
+        ctx.beginPath();
+        ctx.moveTo(sigX + 10, sigY + 85);
+        ctx.lineTo(sigX + sigWidth - 10, sigY + 85);
+        ctx.strokeStyle = '#334155';
+        ctx.stroke();
+
+        // Name and date
+        ctx.font = 'bold 11px Arial, sans-serif';
+        ctx.fillStyle = '#1e293b';
+        ctx.textAlign = 'left';
+        ctx.fillText(signer.fullName, sigX + 10, sigY + 100);
+
+        ctx.font = '9px Arial, sans-serif';
+        ctx.fillStyle = '#64748b';
+        ctx.textAlign = 'right';
+        ctx.fillText(signer.signedAt ? new Date(signer.signedAt).toLocaleDateString() : '', sigX + sigWidth - 10, sigY + 100);
+
+        ctx.textAlign = 'left';
       }
+
+      // Footer with hash
+      ctx.font = '8px Arial, sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.textAlign = 'center';
+      ctx.fillText(`SHA-256: ${doc.hashOriginal?.substring(0, 40)}...`, width / 2, height - 50);
+      ctx.fillText(`Documento generado por AMIS Central • ${new Date().toLocaleString()}`, width / 2, height - 35);
 
       // Download
       const link = document.createElement('a');
       link.download = `${doc.title.replace(/[^a-z0-9]/gi, '_')}_firmado.png`;
-      link.href = canvas.toDataURL('image/png');
+      link.href = canvas.toDataURL('image/png', 1.0);
       link.click();
     } catch (err) {
       console.error('Download error:', err);
@@ -788,20 +958,24 @@ const DocumentDetail = ({ doc, isDark, onSendForSigning, onOpenSignPanel, onDele
   );
 };
 
-// Sign Panel with Position Selection, Canvas and Text Options
+// Sign Panel - Signer only creates signature (position set by creator)
 const SignPanel = ({ doc, isDark, onSign, onReject, onCancel }: any) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const documentPreviewRef = useRef<HTMLDivElement>(null);
 
-  const [step, setStep] = useState<'position' | 'sign' | 'reject'>('position');
-  const [signaturePosition, setSignaturePosition] = useState({ x: 50, y: 80 }); // Percentage position
-  const [isDragging, setIsDragging] = useState(false);
-
+  const [step, setStep] = useState<'sign' | 'reject'>('sign');
   const [isDrawing, setIsDrawing] = useState(false);
-  const [signMode, setSignMode] = useState<'draw' | 'text'>('draw');
-  const [textSignature, setTextSignature] = useState('');
+  const [signMode, setSignMode] = useState<'draw' | 'text' | 'saved'>('draw');
+
+  // Multi-line text signature
+  const [signatureName, setSignatureName] = useState('');
+  const [signatureTitle, setSignatureTitle] = useState('');
   const [selectedFont, setSelectedFont] = useState('Dancing Script');
+
+  // Saved signatures
+  const [savedSignatures, setSavedSignatures] = useState<{ id: string; name: string; data: string }[]>([]);
+  const [selectedSavedId, setSelectedSavedId] = useState<string | null>(null);
+
   const [rejectReason, setRejectReason] = useState('');
 
   const fonts = [
@@ -814,32 +988,21 @@ const SignPanel = ({ doc, isDark, onSign, onReject, onCancel }: any) => {
 
   const currentSigner = doc.signers.find((s: SignatureSigner) => s.status === 'Pendiente');
 
-  // Handle dragging the signature position
-  const handlePositionMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    e.preventDefault();
-  };
-
-  const handlePositionMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !documentPreviewRef.current) return;
-
-    const rect = documentPreviewRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-
-    setSignaturePosition({
-      x: Math.max(5, Math.min(70, x)),
-      y: Math.max(10, Math.min(85, y))
-    });
-  };
-
-  const handlePositionMouseUp = () => {
-    setIsDragging(false);
-  };
+  // Load saved signatures from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('amis_saved_signatures');
+      if (saved) {
+        setSavedSignatures(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error('Error loading saved signatures', e);
+    }
+  }, []);
 
   // Initialize canvas
   useEffect(() => {
-    if (step !== 'sign') return;
+    if (signMode !== 'draw') return;
 
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -863,7 +1026,7 @@ const SignPanel = ({ doc, isDark, onSign, onReject, onCancel }: any) => {
     ctx.lineJoin = 'round';
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, rect.width, rect.height);
-  }, [step, signMode]);
+  }, [signMode]);
 
   const getCoords = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current!;
@@ -923,150 +1086,125 @@ const SignPanel = ({ doc, isDark, onSign, onReject, onCancel }: any) => {
     }
   };
 
+  // Multi-line text signature generator
   const generateTextSignature = (): string => {
     const canvas = document.createElement('canvas');
     canvas.width = 600;
-    canvas.height = 150;
+    canvas.height = 180;
     const ctx = canvas.getContext('2d');
     if (!ctx) return '';
 
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, 600, 150);
+    ctx.fillRect(0, 0, 600, 180);
 
-    ctx.font = `italic 48px '${selectedFont}', cursive`;
+    // Main signature name
+    ctx.font = `italic 42px '${selectedFont}', cursive`;
     ctx.fillStyle = '#1e293b';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(textSignature, 300, 75);
+    ctx.fillText(signatureName, 300, 60);
+
+    // Title/role (smaller)
+    if (signatureTitle) {
+      ctx.font = `16px Arial, sans-serif`;
+      ctx.fillStyle = '#64748b';
+      ctx.fillText(signatureTitle, 300, 110);
+    }
+
+    // Date
+    ctx.font = `12px Arial, sans-serif`;
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(new Date().toLocaleDateString(), 300, 140);
 
     return canvas.toDataURL('image/png');
   };
 
-  const handleConfirm = () => {
+  // Save current signature for reuse
+  const saveCurrentSignature = () => {
     let data: string;
     if (signMode === 'draw') {
       data = canvasRef.current?.toDataURL('image/png') || '';
     } else {
       data = generateTextSignature();
     }
-    // Include position data with signature
+
+    if (!data) return;
+
+    const newSig = {
+      id: Date.now().toString(),
+      name: signatureName || 'Mi Firma',
+      data
+    };
+
+    const updated = [...savedSignatures, newSig];
+    setSavedSignatures(updated);
+    localStorage.setItem('amis_saved_signatures', JSON.stringify(updated));
+    alert('Firma guardada correctamente');
+  };
+
+  // Delete saved signature
+  const deleteSavedSignature = (id: string) => {
+    const updated = savedSignatures.filter(s => s.id !== id);
+    setSavedSignatures(updated);
+    localStorage.setItem('amis_saved_signatures', JSON.stringify(updated));
+    if (selectedSavedId === id) setSelectedSavedId(null);
+  };
+
+  const handleConfirm = () => {
+    let data: string;
+    if (signMode === 'draw') {
+      data = canvasRef.current?.toDataURL('image/png') || '';
+    } else if (signMode === 'text') {
+      data = generateTextSignature();
+    } else if (signMode === 'saved' && selectedSavedId) {
+      const found = savedSignatures.find(s => s.id === selectedSavedId);
+      data = found?.data || '';
+    } else {
+      data = '';
+    }
+
     if (data) {
-      onSign(data, signaturePosition);
+      // Get position from signer data (set by creator)
+      const signerPosition = currentSigner?.position || { x: 50, y: 80 };
+      onSign(data, signerPosition);
     }
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 overflow-auto"
-      onMouseMove={handlePositionMouseMove}
-      onMouseUp={handlePositionMouseUp}
-      onMouseLeave={handlePositionMouseUp}
-    >
-      <div className="max-w-5xl w-full">
+    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-4 overflow-auto">
+      <div className="max-w-3xl w-full">
 
-        {/* Step 1: Position Signature */}
-        {step === 'position' && (
-          <div className="space-y-6">
-            <div className="text-center">
-              <h2 className="text-2xl font-black text-white mb-2">📍 Posicionar Firma</h2>
-              <p className="text-white/60 text-sm">Arrastre el recuadro para ubicar donde desea firmar</p>
-              <p className="text-indigo-400 text-xs mt-1">Firmando como: {currentSigner?.fullName}</p>
-            </div>
-
-            {/* Document Preview with Draggable Signature Position */}
-            <div
-              ref={documentPreviewRef}
-              className="bg-white rounded-2xl shadow-xl p-8 min-h-[500px] relative select-none cursor-default"
-              style={{ fontFamily: 'serif' }}
-            >
-              {/* Document Header */}
-              <div className="text-center mb-6 pb-4 border-b-2 border-slate-200">
-                <h1 className="text-xl font-bold text-slate-800">{doc.title}</h1>
-              </div>
-
-              {/* Document Content */}
-              <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap mb-8">
-                {doc.content?.substring(0, 800) || 'Documento PDF adjunto'}
-                {doc.content?.length > 800 && '...'}
-              </div>
-
-              {/* Draggable Signature Placeholder */}
-              <div
-                className={`absolute border-2 border-dashed rounded-lg p-3 cursor-move transition-shadow ${isDragging ? 'border-indigo-500 shadow-lg bg-indigo-50' : 'border-amber-400 bg-amber-50/50'}`}
-                style={{
-                  left: `${signaturePosition.x}%`,
-                  top: `${signaturePosition.y}%`,
-                  width: '160px',
-                  height: '60px',
-                  transform: 'translate(-50%, -50%)'
-                }}
-                onMouseDown={handlePositionMouseDown}
-              >
-                <div className="text-center">
-                  <PenTool className="w-5 h-5 mx-auto text-amber-600" />
-                  <p className="text-[8px] text-amber-700 font-bold mt-1">FIRMA AQUÍ</p>
-                </div>
-              </div>
-
-              {/* Existing Signatures (if any) */}
-              {doc.signers.filter((s: any) => s.status === 'Firmado').map((signer: any, idx: number) => (
-                <div
-                  key={signer.id}
-                  className="absolute border border-slate-300 rounded-lg p-2 bg-white"
-                  style={{
-                    left: `${20 + (idx * 35)}%`,
-                    bottom: '10%',
-                    width: '150px'
-                  }}
-                >
-                  {signer.signatureData && (
-                    <img src={signer.signatureData} alt="" className="h-10 object-contain w-full" />
-                  )}
-                  <p className="text-[8px] text-slate-500 text-center mt-1">{signer.fullName}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={onCancel}
-                className="flex-1 py-4 border border-white/20 text-white rounded-2xl font-bold text-sm hover:bg-white/5"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => setStep('sign')}
-                className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-indigo-700"
-              >
-                Continuar a Firma <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 2: Create Signature */}
+        {/* Sign Mode */}
         {step === 'sign' && (
           <div className="space-y-6">
             <div className="text-center">
-              <h2 className="text-2xl font-black text-white mb-2">✏️ Crear Firma</h2>
-              <p className="text-white/60 text-sm">Dibuje o escriba su firma</p>
+              <h2 className="text-2xl font-black text-white mb-2">✏️ Firmar Documento</h2>
+              <p className="text-indigo-400 text-sm">Firmando como: {currentSigner?.fullName}</p>
+              <p className="text-white/40 text-xs mt-1">{doc.title}</p>
             </div>
 
             {/* Signature Mode Tabs */}
-            <div className="flex justify-center gap-2">
+            <div className="flex justify-center gap-2 flex-wrap">
               <button
                 onClick={() => setSignMode('draw')}
-                className={`px-6 py-3 rounded-xl font-bold text-sm transition-all ${signMode === 'draw' ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/60'}`}
+                className={`px-5 py-3 rounded-xl font-bold text-sm transition-all ${signMode === 'draw' ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/60'}`}
               >
                 ✏️ Dibujar
               </button>
               <button
                 onClick={() => setSignMode('text')}
-                className={`px-6 py-3 rounded-xl font-bold text-sm transition-all ${signMode === 'text' ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/60'}`}
+                className={`px-5 py-3 rounded-xl font-bold text-sm transition-all ${signMode === 'text' ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/60'}`}
               >
                 🔤 Escribir
               </button>
+              {savedSignatures.length > 0 && (
+                <button
+                  onClick={() => setSignMode('saved')}
+                  className={`px-5 py-3 rounded-xl font-bold text-sm transition-all ${signMode === 'saved' ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/60'}`}
+                >
+                  💾 Guardadas ({savedSignatures.length})
+                </button>
+              )}
             </div>
 
             {/* Draw Mode */}
@@ -1089,26 +1227,43 @@ const SignPanel = ({ doc, isDark, onSign, onReject, onCancel }: any) => {
                     onTouchEnd={stopDraw}
                   />
                 </div>
-                <button
-                  onClick={clearCanvas}
-                  className="mt-2 mx-auto block px-4 py-2 bg-white/10 text-white/60 rounded-lg text-xs font-bold hover:bg-white/20"
-                >
-                  🗑️ Limpiar
-                </button>
+                <div className="flex justify-center gap-2 mt-3">
+                  <button
+                    onClick={clearCanvas}
+                    className="px-4 py-2 bg-white/10 text-white/60 rounded-lg text-xs font-bold hover:bg-white/20"
+                  >
+                    🗑️ Limpiar
+                  </button>
+                  <button
+                    onClick={saveCurrentSignature}
+                    className="px-4 py-2 bg-amber-600/80 text-white rounded-lg text-xs font-bold hover:bg-amber-600"
+                  >
+                    💾 Guardar para reutilizar
+                  </button>
+                </div>
               </div>
             )}
 
-            {/* Text Mode */}
+            {/* Text Mode - Multi-line */}
             {signMode === 'text' && (
               <div className="space-y-4">
-                <input
-                  type="text"
-                  value={textSignature}
-                  onChange={e => setTextSignature(e.target.value)}
-                  placeholder="Escriba su nombre..."
-                  className="w-full p-4 rounded-xl bg-white text-slate-900 text-xl text-center outline-none"
-                  style={{ fontFamily: `'${selectedFont}', cursive`, fontStyle: 'italic' }}
-                />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    value={signatureName}
+                    onChange={e => setSignatureName(e.target.value)}
+                    placeholder="Nombre completo..."
+                    className="w-full p-4 rounded-xl bg-white text-slate-900 text-lg text-center outline-none"
+                    style={{ fontFamily: `'${selectedFont}', cursive`, fontStyle: 'italic' }}
+                  />
+                  <input
+                    type="text"
+                    value={signatureTitle}
+                    onChange={e => setSignatureTitle(e.target.value)}
+                    placeholder="Cargo / Título (opcional)"
+                    className="w-full p-3 rounded-xl bg-white/90 text-slate-700 text-sm text-center outline-none"
+                  />
+                </div>
 
                 <div className="flex flex-wrap justify-center gap-2">
                   {fonts.map(font => (
@@ -1123,15 +1278,58 @@ const SignPanel = ({ doc, isDark, onSign, onReject, onCancel }: any) => {
                   ))}
                 </div>
 
-                {textSignature && (
+                {/* Preview */}
+                {signatureName && (
                   <div className="bg-white rounded-xl p-6 text-center">
                     <p
-                      className="text-4xl text-slate-800"
+                      className="text-3xl text-slate-800 mb-1"
                       style={{ fontFamily: `'${selectedFont}', cursive`, fontStyle: 'italic' }}
                     >
-                      {textSignature}
+                      {signatureName}
                     </p>
+                    {signatureTitle && (
+                      <p className="text-sm text-slate-500">{signatureTitle}</p>
+                    )}
+                    <p className="text-xs text-slate-400 mt-2">{new Date().toLocaleDateString()}</p>
                   </div>
+                )}
+
+                <div className="flex justify-center">
+                  <button
+                    onClick={saveCurrentSignature}
+                    disabled={!signatureName}
+                    className="px-4 py-2 bg-amber-600/80 text-white rounded-lg text-xs font-bold hover:bg-amber-600 disabled:opacity-40"
+                  >
+                    💾 Guardar para reutilizar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Saved Signatures Mode */}
+            {signMode === 'saved' && (
+              <div className="space-y-4">
+                <p className="text-center text-white/40 text-xs">Seleccione una firma guardada</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {savedSignatures.map(sig => (
+                    <div
+                      key={sig.id}
+                      onClick={() => setSelectedSavedId(sig.id)}
+                      className={`p-3 rounded-xl cursor-pointer transition-all border-2 ${selectedSavedId === sig.id ? 'border-indigo-500 bg-indigo-50' : 'border-transparent bg-white/10 hover:bg-white/20'}`}
+                    >
+                      <img src={sig.data} alt={sig.name} className="h-16 w-full object-contain" />
+                      <p className="text-[10px] text-center mt-2 text-white/60 truncate">{sig.name}</p>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteSavedSignature(sig.id); }}
+                        className="text-[9px] text-red-400 w-full text-center mt-1 hover:text-red-300"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {savedSignatures.length === 0 && (
+                  <p className="text-center text-white/30 py-8">No hay firmas guardadas</p>
                 )}
               </div>
             )}
@@ -1139,10 +1337,10 @@ const SignPanel = ({ doc, isDark, onSign, onReject, onCancel }: any) => {
             {/* Action Buttons */}
             <div className="flex gap-3">
               <button
-                onClick={() => setStep('position')}
+                onClick={onCancel}
                 className="py-4 px-6 border border-white/20 text-white rounded-2xl font-bold text-sm hover:bg-white/5"
               >
-                ← Volver
+                Cancelar
               </button>
               <button
                 onClick={() => setStep('reject')}
@@ -1152,7 +1350,10 @@ const SignPanel = ({ doc, isDark, onSign, onReject, onCancel }: any) => {
               </button>
               <button
                 onClick={handleConfirm}
-                disabled={signMode === 'text' && !textSignature}
+                disabled={
+                  (signMode === 'text' && !signatureName) ||
+                  (signMode === 'saved' && !selectedSavedId)
+                }
                 className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 disabled:opacity-40"
               >
                 <Check className="w-5 h-5" /> Confirmar Firma
