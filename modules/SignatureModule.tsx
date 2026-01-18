@@ -559,129 +559,248 @@ const CreateWizard = ({ isDark, currentUser, onComplete, onCancel }: any) => {
 };
 
 // Document Detail
-const DocumentDetail = ({ doc, isDark, onSendForSigning, onOpenSignPanel, onDelete }: any) => (
-  <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-    {/* Main Content */}
-    <div className={`xl:col-span-2 p-8 rounded-[40px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-      <div className="flex justify-between items-start mb-6">
+const DocumentDetail = ({ doc, isDark, onSendForSigning, onOpenSignPanel, onDelete }: any) => {
+
+  const downloadCertificate = () => {
+    const certContent = `
+═══════════════════════════════════════════════════════
+          CERTIFICADO DE FIRMA DIGITAL
+═══════════════════════════════════════════════════════
+
+Documento: ${doc.title}
+ID: ${doc.id}
+Estado: ${doc.status}
+
+Hash Original (SHA-256):
+${doc.hashOriginal}
+
+${doc.hashFinal ? `Hash Final (SHA-256):\n${doc.hashFinal}\n` : ''}
+
+FIRMANTES:
+${doc.signers.map((s: any) => `
+  • ${s.fullName} (${s.email})
+    Estado: ${s.status}
+    ${s.signedAt ? `Firmado: ${new Date(s.signedAt).toLocaleString()}` : ''}
+    ${s.ipAddress ? `IP: ${s.ipAddress}` : ''}
+`).join('')}
+
+TRAZABILIDAD:
+${doc.evidenceLog?.map((ev: any) => `
+  [${new Date(ev.timestamp).toLocaleString()}] ${ev.detail}
+`).join('') || 'Sin eventos'}
+
+---
+Documento generado por AMIS Central
+Fecha de emisión: ${new Date().toLocaleString()}
+═══════════════════════════════════════════════════════
+    `.trim();
+
+    const blob = new Blob([certContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `certificado_${doc.id}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      {/* Main Content */}
+      <div className={`xl:col-span-2 p-8 rounded-[40px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <StatusBadge status={doc.status} />
+            <h3 className="text-2xl font-black mt-2">{doc.title}</h3>
+            {doc.description && <p className="opacity-50 text-sm mt-1">{doc.description}</p>}
+          </div>
+          <div className="flex gap-2">
+            {doc.status === 'Borrador' && (
+              <button onClick={onSendForSigning} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center gap-2">
+                <Send className="w-4 h-4" /> Enviar a Firmar
+              </button>
+            )}
+            {['Pendiente', 'EnProceso'].includes(doc.status) && (
+              <button onClick={onOpenSignPanel} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center gap-2">
+                <PenTool className="w-4 h-4" /> Firmar
+              </button>
+            )}
+            {doc.status === 'Firmado' && (
+              <button onClick={downloadCertificate} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold flex items-center gap-2">
+                <Download className="w-4 h-4" /> Certificado
+              </button>
+            )}
+            <button onClick={onDelete} className="p-2 text-red-500 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20">
+              <Trash2 className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content Preview */}
+        <div className={`p-6 rounded-2xl border mb-6 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
+          <div className="flex items-center gap-2 mb-4 text-[10px] font-black uppercase opacity-40">
+            <Fingerprint className="w-4 h-4" /> Hash: {doc.hashOriginal?.substring(0, 24)}...
+          </div>
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            {doc.content ? (
+              <p className="whitespace-pre-wrap">{doc.content}</p>
+            ) : (
+              <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="text-indigo-500 underline">Ver PDF Adjunto</a>
+            )}
+          </div>
+        </div>
+
+        {/* Signers Progress */}
         <div>
-          <StatusBadge status={doc.status} />
-          <h3 className="text-2xl font-black mt-2">{doc.title}</h3>
-          {doc.description && <p className="opacity-50 text-sm mt-1">{doc.description}</p>}
-        </div>
-        <div className="flex gap-2">
-          {doc.status === 'Borrador' && (
-            <button onClick={onSendForSigning} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center gap-2">
-              <Send className="w-4 h-4" /> Enviar a Firmar
-            </button>
-          )}
-          {['Pendiente', 'EnProceso'].includes(doc.status) && (
-            <button onClick={onOpenSignPanel} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center gap-2">
-              <PenTool className="w-4 h-4" /> Firmar
-            </button>
-          )}
-          <button onClick={onDelete} className="p-2 text-red-500 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/20">
-            <Trash2 className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Content Preview */}
-      <div className={`p-6 rounded-2xl border mb-6 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-100'}`}>
-        <div className="flex items-center gap-2 mb-4 text-[10px] font-black uppercase opacity-40">
-          <Fingerprint className="w-4 h-4" /> Hash: {doc.hashOriginal?.substring(0, 24)}...
-        </div>
-        <div className="prose prose-sm dark:prose-invert max-w-none">
-          {doc.content ? (
-            <p className="whitespace-pre-wrap">{doc.content}</p>
-          ) : (
-            <a href={doc.fileUrl} target="_blank" rel="noreferrer" className="text-indigo-500 underline">Ver PDF Adjunto</a>
-          )}
-        </div>
-      </div>
-
-      {/* Signers Progress */}
-      <div>
-        <h4 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Firmantes ({doc.completedSignatures}/{doc.requiredSignatures})</h4>
-        <div className="space-y-3">
-          {doc.signers.map((s: SignatureSigner) => (
-            <div key={s.id} className={`flex items-center justify-between p-4 rounded-xl border ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
-              <div className="flex items-center gap-3">
-                <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${s.status === 'Firmado' ? 'bg-emerald-100 text-emerald-600' : s.status === 'Rechazado' ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
-                  {s.order}
-                </span>
-                <div>
-                  <p className="font-bold text-sm">{s.fullName}</p>
-                  <p className="text-[10px] opacity-50">{s.email}</p>
+          <h4 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4">Firmantes ({doc.completedSignatures}/{doc.requiredSignatures})</h4>
+          <div className="space-y-3">
+            {doc.signers.map((s: SignatureSigner) => (
+              <div key={s.id} className={`p-4 rounded-xl border ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${s.status === 'Firmado' ? 'bg-emerald-100 text-emerald-600' : s.status === 'Rechazado' ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
+                      {s.order}
+                    </span>
+                    <div>
+                      <p className="font-bold text-sm">{s.fullName}</p>
+                      <p className="text-[10px] opacity-50">{s.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {s.status === 'Firmado' && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+                    {s.status === 'Rechazado' && <XCircle className="w-5 h-5 text-red-500" />}
+                    {s.status === 'Pendiente' && <Clock className="w-5 h-5 text-amber-500" />}
+                    <span className="text-[10px] font-bold uppercase">{s.status}</span>
+                  </div>
                 </div>
+
+                {/* Show signature image if signed */}
+                {s.status === 'Firmado' && s.signatureData && (
+                  <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                    <p className="text-[9px] uppercase font-bold opacity-40 mb-2">Firma Digital:</p>
+                    <img
+                      src={s.signatureData}
+                      alt={`Firma de ${s.fullName}`}
+                      className="h-16 object-contain rounded-lg border border-slate-200 dark:border-slate-700 bg-white"
+                    />
+                    {s.signedAt && (
+                      <p className="text-[9px] opacity-40 mt-1">
+                        Firmado: {new Date(s.signedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Show rejection reason if rejected */}
+                {s.status === 'Rechazado' && s.rejectionReason && (
+                  <div className="mt-3 pt-3 border-t border-red-200 dark:border-red-800">
+                    <p className="text-[9px] uppercase font-bold text-red-500 mb-1">Motivo de rechazo:</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">{s.rejectionReason}</p>
+                  </div>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                {s.status === 'Firmado' && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
-                {s.status === 'Rechazado' && <XCircle className="w-5 h-5 text-red-500" />}
-                {s.status === 'Pendiente' && <Clock className="w-5 h-5 text-amber-500" />}
-                <span className="text-[10px] font-bold uppercase">{s.status}</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Sidebar: Evidence */}
+      <div className={`p-6 rounded-[40px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+        <h4 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4 flex items-center gap-2">
+          <History className="w-4 h-4" /> Trazabilidad
+        </h4>
+        <div className="space-y-4">
+          {doc.evidenceLog?.map((ev: any) => (
+            <div key={ev.id} className="flex gap-3">
+              <div className={`w-2 h-2 mt-2 rounded-full ${ev.event === 'signed' || ev.event === 'completed' ? 'bg-emerald-500' : ev.event === 'rejected' ? 'bg-red-500' : 'bg-blue-500'}`} />
+              <div>
+                <p className="text-xs font-bold">{ev.detail}</p>
+                <p className="text-[9px] opacity-40">{new Date(ev.timestamp).toLocaleString()}</p>
               </div>
             </div>
           ))}
+          {(!doc.evidenceLog || doc.evidenceLog.length === 0) && (
+            <p className="text-sm opacity-40 text-center py-8">Sin eventos</p>
+          )}
         </div>
       </div>
     </div>
+  );
+};
 
-    {/* Sidebar: Evidence */}
-    <div className={`p-6 rounded-[40px] border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-      <h4 className="text-xs font-black uppercase tracking-widest opacity-40 mb-4 flex items-center gap-2">
-        <History className="w-4 h-4" /> Trazabilidad
-      </h4>
-      <div className="space-y-4">
-        {doc.evidenceLog?.map((ev: any) => (
-          <div key={ev.id} className="flex gap-3">
-            <div className={`w-2 h-2 mt-2 rounded-full ${ev.event === 'signed' || ev.event === 'completed' ? 'bg-emerald-500' : ev.event === 'rejected' ? 'bg-red-500' : 'bg-blue-500'}`} />
-            <div>
-              <p className="text-xs font-bold">{ev.detail}</p>
-              <p className="text-[9px] opacity-40">{new Date(ev.timestamp).toLocaleString()}</p>
-            </div>
-          </div>
-        ))}
-        {(!doc.evidenceLog || doc.evidenceLog.length === 0) && (
-          <p className="text-sm opacity-40 text-center py-8">Sin eventos</p>
-        )}
-      </div>
-    </div>
-  </div>
-);
-
-// Sign Panel with Canvas
+// Sign Panel with Canvas and Text Options
 const SignPanel = ({ doc, isDark, onSign, onReject, onCancel }: any) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [rejectMode, setRejectMode] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [signMode, setSignMode] = useState<'draw' | 'text'>('draw');
+  const [textSignature, setTextSignature] = useState('');
+  const [selectedFont, setSelectedFont] = useState('Dancing Script');
 
+  const fonts = [
+    { name: 'Dancing Script', label: 'Elegante' },
+    { name: 'Great Vibes', label: 'Clásica' },
+    { name: 'Pacifico', label: 'Casual' },
+    { name: 'Sacramento', label: 'Fluida' },
+    { name: 'Satisfy', label: 'Moderna' }
+  ];
+
+  // Initialize canvas with proper scaling
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
+    // Get actual container size
+    const rect = container.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
 
-    ctx.strokeStyle = isDark ? '#fff' : '#000';
-    ctx.lineWidth = 3;
+    // Set canvas size accounting for device pixel ratio
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.height}px`;
+
+    // Scale context for retina displays
+    ctx.scale(dpr, dpr);
+
+    ctx.strokeStyle = '#1e293b'; // Dark blue for better visibility on white
+    ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-  }, [isDark]);
 
-  const getCoords = (e: any) => {
+    // Fill white background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+  }, [signMode]);
+
+  const getCoords = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-    const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-    return { x, y };
+
+    let clientX: number, clientY: number;
+    if ('touches' in e && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if ('clientX' in e) {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    } else {
+      return { x: 0, y: 0 };
+    }
+
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    };
   };
 
-  const startDraw = (e: any) => {
+  const startDraw = (e: React.MouseEvent | React.TouchEvent) => {
     setIsDrawing(true);
     const ctx = canvasRef.current?.getContext('2d');
     const { x, y } = getCoords(e);
@@ -690,7 +809,7 @@ const SignPanel = ({ doc, isDark, onSign, onReject, onCancel }: any) => {
     e.preventDefault();
   };
 
-  const draw = (e: any) => {
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isDrawing) return;
     const ctx = canvasRef.current?.getContext('2d');
     const { x, y } = getCoords(e);
@@ -706,52 +825,169 @@ const SignPanel = ({ doc, isDark, onSign, onReject, onCancel }: any) => {
 
   const clearCanvas = () => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    ctx?.clearRect(0, 0, canvas?.width || 0, canvas?.height || 0);
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    const ctx = canvas.getContext('2d');
+    const rect = container.getBoundingClientRect();
+
+    ctx?.fillStyle && (ctx.fillStyle = '#ffffff');
+    ctx?.fillRect(0, 0, rect.width, rect.height);
+  };
+
+  const generateTextSignature = (): string => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 150;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 600, 150);
+
+    ctx.font = `italic 48px '${selectedFont}', cursive`;
+    ctx.fillStyle = '#1e293b';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(textSignature, 300, 75);
+
+    return canvas.toDataURL('image/png');
   };
 
   const handleConfirm = () => {
-    const data = canvasRef.current?.toDataURL('image/png');
+    let data: string;
+    if (signMode === 'draw') {
+      data = canvasRef.current?.toDataURL('image/png') || '';
+    } else {
+      data = generateTextSignature();
+    }
     if (data) onSign(data);
   };
 
   const currentSigner = doc.signers.find((s: SignatureSigner) => s.status === 'Pendiente');
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-6">
-      <div className="max-w-3xl w-full">
+    <div className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex items-center justify-center p-6 overflow-auto">
+      <div className="max-w-4xl w-full">
         {!rejectMode ? (
-          <div className="text-center space-y-8">
-            <div>
-              <h2 className="text-4xl font-black text-white mb-2">{doc.title}</h2>
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="text-center">
+              <h2 className="text-3xl font-black text-white mb-2">{doc.title}</h2>
               <p className="text-indigo-400 text-sm">Firmando como: {currentSigner?.fullName}</p>
             </div>
 
-            <div className="relative h-64 rounded-3xl border-2 border-dashed border-white/20 bg-white/5 overflow-hidden">
-              <canvas
-                ref={canvasRef}
-                className="w-full h-full cursor-crosshair touch-none"
-                onMouseDown={startDraw}
-                onMouseMove={draw}
-                onMouseUp={stopDraw}
-                onMouseOut={stopDraw}
-                onTouchStart={startDraw}
-                onTouchMove={draw}
-                onTouchEnd={stopDraw}
-              />
+            {/* Document Preview */}
+            <div className="bg-white/10 rounded-2xl p-4 max-h-40 overflow-auto">
+              <p className="text-white/70 text-sm whitespace-pre-wrap">
+                {doc.content?.substring(0, 300)}
+                {doc.content?.length > 300 && '...'}
+              </p>
             </div>
 
-            <div className="flex gap-4">
-              <button onClick={onCancel} className="flex-1 py-4 border border-white/20 text-white rounded-2xl font-bold text-sm">
+            {/* Signature Mode Tabs */}
+            <div className="flex justify-center gap-2">
+              <button
+                onClick={() => setSignMode('draw')}
+                className={`px-6 py-3 rounded-xl font-bold text-sm transition-all ${signMode === 'draw' ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/60'}`}
+              >
+                ✏️ Dibujar Firma
+              </button>
+              <button
+                onClick={() => setSignMode('text')}
+                className={`px-6 py-3 rounded-xl font-bold text-sm transition-all ${signMode === 'text' ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/60'}`}
+              >
+                🔤 Escribir Nombre
+              </button>
+            </div>
+
+            {/* Draw Mode */}
+            {signMode === 'draw' && (
+              <div>
+                <p className="text-center text-white/40 text-xs mb-2">Dibuje su firma en el recuadro blanco</p>
+                <div
+                  ref={containerRef}
+                  className="relative h-48 rounded-2xl overflow-hidden bg-white shadow-lg"
+                >
+                  <canvas
+                    ref={canvasRef}
+                    className="absolute inset-0 cursor-crosshair touch-none"
+                    onMouseDown={startDraw}
+                    onMouseMove={draw}
+                    onMouseUp={stopDraw}
+                    onMouseLeave={stopDraw}
+                    onTouchStart={startDraw}
+                    onTouchMove={draw}
+                    onTouchEnd={stopDraw}
+                  />
+                </div>
+                <button
+                  onClick={clearCanvas}
+                  className="mt-2 mx-auto block px-4 py-2 bg-white/10 text-white/60 rounded-lg text-xs font-bold hover:bg-white/20"
+                >
+                  🗑️ Limpiar
+                </button>
+              </div>
+            )}
+
+            {/* Text Mode */}
+            {signMode === 'text' && (
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  value={textSignature}
+                  onChange={e => setTextSignature(e.target.value)}
+                  placeholder="Escriba su nombre completo..."
+                  className="w-full p-4 rounded-xl bg-white text-slate-900 text-xl text-center outline-none"
+                  style={{ fontFamily: `'${selectedFont}', cursive`, fontStyle: 'italic' }}
+                />
+
+                <div className="flex flex-wrap justify-center gap-2">
+                  {fonts.map(font => (
+                    <button
+                      key={font.name}
+                      onClick={() => setSelectedFont(font.name)}
+                      className={`px-4 py-2 rounded-lg text-sm transition-all ${selectedFont === font.name ? 'bg-indigo-600 text-white' : 'bg-white/10 text-white/60'}`}
+                      style={{ fontFamily: `'${font.name}', cursive` }}
+                    >
+                      {font.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Preview */}
+                {textSignature && (
+                  <div className="bg-white rounded-xl p-6 text-center">
+                    <p
+                      className="text-4xl text-slate-800"
+                      style={{ fontFamily: `'${selectedFont}', cursive`, fontStyle: 'italic' }}
+                    >
+                      {textSignature}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={onCancel}
+                className="flex-1 py-4 border border-white/20 text-white rounded-2xl font-bold text-sm hover:bg-white/5"
+              >
                 Cancelar
               </button>
-              <button onClick={clearCanvas} className="py-4 px-6 bg-white/10 text-white rounded-2xl font-bold text-sm flex items-center gap-2">
-                <Eraser className="w-4 h-4" /> Limpiar
-              </button>
-              <button onClick={() => setRejectMode(true)} className="py-4 px-6 bg-red-600 text-white rounded-2xl font-bold text-sm">
+              <button
+                onClick={() => setRejectMode(true)}
+                className="py-4 px-6 bg-red-600 text-white rounded-2xl font-bold text-sm hover:bg-red-700"
+              >
                 Rechazar
               </button>
-              <button onClick={handleConfirm} className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2">
+              <button
+                onClick={handleConfirm}
+                disabled={(signMode === 'text' && !textSignature)}
+                className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 disabled:opacity-40"
+              >
                 <Check className="w-5 h-5" /> Confirmar Firma
               </button>
             </div>
