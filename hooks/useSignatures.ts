@@ -90,7 +90,9 @@ export const useSignatures = () => {
         console.log('Seeding signature documents...');
         for (const doc of INITIAL_DOCS) {
           const hash = await generateHash(doc.content || doc.title);
-          await addDocument(collection, { ...doc, hashOriginal: hash });
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id, ...docData } = doc;
+          await addDocument(collection, { ...docData, hashOriginal: hash });
         }
         data = await getDocuments<SignatureDocument>(collection, 'createdAt');
       }

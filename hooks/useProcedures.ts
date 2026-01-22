@@ -117,7 +117,9 @@ export const useProcedures = () => {
         if (catData.length === 0) {
           console.log('No catalog found, seeding initial data...');
           for (const item of INITIAL_CATALOG) {
-            await addDocument(catalogCol, item);
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { id, ...itemData } = item;
+            await addDocument(catalogCol, itemData);
           }
           const seededCatalog = await getDocuments<ProcedureCatalogItem>(catalogCol);
           setCatalog(seededCatalog);
@@ -130,7 +132,9 @@ export const useProcedures = () => {
         if (procData.length === 0) {
           console.log('No procedures found, seeding initial data...');
           for (const proc of INITIAL_PROCEDURES) {
-            await addDocument(proceduresCol, proc);
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { id, ...procData } = proc;
+            await addDocument(proceduresCol, procData);
           }
           const seededProcs = await getDocuments<ProcedureEntry>(proceduresCol, 'createdAt');
           setProcedures(seededProcs);

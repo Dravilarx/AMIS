@@ -62,8 +62,8 @@ export async function getDocuments<T extends FirestoreDocument>(
         const querySnapshot = await getDocs(q);
 
         return querySnapshot.docs.map(doc => ({
-            id: doc.id,
             ...doc.data(),
+            id: doc.id,
         })) as T[];
     } catch (error) {
         console.error(`Error getting documents from ${collectionName}:`, error);
