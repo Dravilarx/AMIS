@@ -11,6 +11,7 @@ import {
     Clock,
     Users,
     ChevronRight,
+    ChevronLeft,
     X,
     Edit2,
     Trash2,
@@ -288,8 +289,8 @@ const ControlGestionModule: React.FC<ControlGestionModuleProps> = ({ isDark }) =
                                             }
                                         }}
                                         className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${assigneeIds.includes(emp.id)
-                                                ? 'bg-indigo-600 text-white'
-                                                : isDark ? 'bg-slate-800 text-white/60' : 'bg-slate-100 text-slate-600'
+                                            ? 'bg-indigo-600 text-white'
+                                            : isDark ? 'bg-slate-800 text-white/60' : 'bg-slate-100 text-slate-600'
                                             }`}
                                     >
                                         {emp.firstName}
@@ -325,6 +326,219 @@ const ControlGestionModule: React.FC<ControlGestionModuleProps> = ({ isDark }) =
                         >
                             Guardar
                         </button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // ========== CALENDAR VIEW ==========
+    const CalendarView = () => {
+        const [currentDate, setCurrentDate] = useState(new Date());
+        const [calendarMode, setCalendarMode] = useState<'month' | 'week'>('month');
+
+        const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+        const getFirstDayOfMonth = (year: number, month: number) => {
+            const day = new Date(year, month, 1).getDay();
+            return day === 0 ? 6 : day - 1; // Adjust for Monday start (0=Mon, 6=Sun)
+        };
+
+        const generateCalendarDays = () => {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            const daysInMonth = getDaysInMonth(year, month);
+            const firstDay = getFirstDayOfMonth(year, month);
+            const days: { date: Date; isCurrentMonth: boolean }[] = [];
+
+            // Previous month padding
+            const prevMonthDate = new Date(year, month, 0);
+            for (let i = firstDay - 1; i >= 0; i--) {
+                days.push({
+                    date: new Date(year, month - 1, prevMonthDate.getDate() - i),
+                    isCurrentMonth: false
+                });
+            }
+
+            // Current month
+            for (let i = 1; i <= daysInMonth; i++) {
+                days.push({
+                    date: new Date(year, month, i),
+                    isCurrentMonth: true
+                });
+            }
+
+            // Next month padding to fill 6 rows (42 days)
+            const remainingDays = 42 - days.length;
+            for (let i = 1; i <= remainingDays; i++) {
+                days.push({
+                    date: new Date(year, month + 1, i),
+                    isCurrentMonth: false
+                });
+            }
+
+            return days;
+        };
+
+        const generateWeekDays = () => {
+            const startOfWeek = new Date(currentDate);
+            const day = startOfWeek.getDay();
+            const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+            startOfWeek.setDate(diff);
+
+            const days = [];
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(startOfWeek);
+                d.setDate(startOfWeek.getDate() + i);
+                days.push({ date: d, isCurrentMonth: true });
+            }
+            return days;
+        };
+
+        const days = calendarMode === 'month' ? generateCalendarDays() : generateWeekDays();
+
+        const changePeriod = (delta: number) => {
+            const newDate = new Date(currentDate);
+            if (calendarMode === 'month') {
+                newDate.setMonth(newDate.getMonth() + delta);
+            } else {
+                newDate.setDate(newDate.getDate() + (delta * 7));
+            }
+            setCurrentDate(newDate);
+        };
+
+        const isToday = (date: Date) => {
+            const today = new Date();
+            return date.getDate() === today.getDate() &&
+                date.getMonth() === today.getMonth() &&
+                date.getFullYear() === today.getFullYear();
+        };
+
+        const getTasksForDate = (date: Date) => {
+            return filteredTasks.filter(task => {
+                if (!task.dueDate) return false;
+                const taskDate = new Date(task.dueDate);
+                return taskDate.getDate() === date.getDate() &&
+                    taskDate.getMonth() === date.getMonth() &&
+                    taskDate.getFullYear() === date.getFullYear();
+            });
+        };
+
+        const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        const dayNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+        return (
+            <div className="flex flex-col h-full bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+                {/* Calendar Header */}
+                <div className="p-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center gap-4">
+                        <h2 className="text-xl font-bold dark:text-white">
+                            {calendarMode === 'month'
+                                ? `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`
+                                : `Semana del ${days[0].date.getDate()} de ${monthNames[days[0].date.getMonth()]}`
+                            }
+                        </h2>
+                        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+                            <button
+                                onClick={() => changePeriod(-1)}
+                                className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-md shadow-sm transition-all"
+                            >
+                                <ChevronLeft className="w-5 h-5 dark:text-white" />
+                            </button>
+                            <button
+                                onClick={() => setCurrentDate(new Date())}
+                                className="px-3 text-sm font-medium dark:text-white hover:bg-white dark:hover:bg-slate-700 rounded-md transition-all"
+                            >
+                                Hoy
+                            </button>
+                            <button
+                                onClick={() => changePeriod(1)}
+                                className="p-1 hover:bg-white dark:hover:bg-slate-700 rounded-md shadow-sm transition-all"
+                            >
+                                <ChevronRight className="w-5 h-5 dark:text-white" />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+                        <button
+                            onClick={() => setCalendarMode('month')}
+                            className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${calendarMode === 'month'
+                                ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-white'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900'
+                                }`}
+                        >
+                            Mes
+                        </button>
+                        <button
+                            onClick={() => setCalendarMode('week')}
+                            className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${calendarMode === 'week'
+                                ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-white'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900'
+                                }`}
+                        >
+                            Semana
+                        </button>
+                    </div>
+                </div>
+
+                {/* Calendar Grid */}
+                <div className="flex-1 flex flex-col min-h-0">
+                    {/* Days Header */}
+                    <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-800">
+                        {dayNames.map(day => (
+                            <div key={day} className="p-2 text-center text-sm font-medium text-slate-500 dark:text-slate-400">
+                                {day}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Days Cells */}
+                    <div className={`flex-1 grid grid-cols-7 ${calendarMode === 'month' ? 'grid-rows-6' : 'grid-rows-1'}`}>
+                        {days.map((dayObj, idx) => {
+                            const dayTasks = getTasksForDate(dayObj.date);
+                            const isCurrentDay = isToday(dayObj.date);
+
+                            return (
+                                <div
+                                    key={idx}
+                                    className={`border-b border-r border-slate-200 dark:border-slate-800 p-2 min-h-0 overflow-y-auto relative group
+                                        ${!dayObj.isCurrentMonth && calendarMode === 'month' ? 'bg-slate-50 dark:bg-slate-800/50' : ''}
+                                        ${isCurrentDay ? 'bg-indigo-50/30 dark:bg-indigo-900/10' : ''}
+                                    `}
+                                    onClick={() => {
+                                        // Optional: Add new task on date click
+                                    }}
+                                >
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className={`text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full
+                                            ${isCurrentDay
+                                                ? 'bg-indigo-600 text-white'
+                                                : dayObj.isCurrentMonth ? 'text-slate-700 dark:text-slate-300' : 'text-slate-400 dark:text-slate-600'
+                                            }
+                                        `}>
+                                            {dayObj.date.getDate()}
+                                        </span>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        {dayTasks.map(task => (
+                                            <button
+                                                key={task.id}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setEditingTask(task);
+                                                    setShowTaskModal(true);
+                                                }}
+                                                className={`w-full text-left p-1.5 rounded-lg text-xs font-medium border border-l-4 transition-all hover:scale-[1.02] truncate
+                                                    ${isDark ? 'bg-slate-800' : 'bg-white shadow-sm'} ${PRIORITY_COLORS[task.priority].border}
+                                                `}
+                                            >
+                                                {task.title}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
@@ -375,8 +589,8 @@ const ControlGestionModule: React.FC<ControlGestionModuleProps> = ({ isDark }) =
         return (
             <div
                 className={`flex-1 min-w-[280px] max-w-[320px] rounded-2xl p-3 transition-all ${dragOverColumn === status
-                        ? 'bg-indigo-100 dark:bg-indigo-900/30 ring-2 ring-indigo-500'
-                        : isDark ? 'bg-slate-800/50' : 'bg-slate-100'
+                    ? 'bg-indigo-100 dark:bg-indigo-900/30 ring-2 ring-indigo-500'
+                    : isDark ? 'bg-slate-800/50' : 'bg-slate-100'
                     }`}
                 onDragOver={e => { e.preventDefault(); setDragOverColumn(status); }}
                 onDragLeave={() => setDragOverColumn(null)}
@@ -519,8 +733,8 @@ const ControlGestionModule: React.FC<ControlGestionModuleProps> = ({ isDark }) =
                                     key={project.id}
                                     onClick={() => setSelectedProjectId(project.id)}
                                     className={`w-full p-3 rounded-xl text-left transition-all ${selectedProjectId === project.id
-                                            ? 'bg-indigo-600 text-white'
-                                            : isDark ? 'hover:bg-slate-800 text-white/80' : 'hover:bg-slate-200 text-slate-700'
+                                        ? 'bg-indigo-600 text-white'
+                                        : isDark ? 'hover:bg-slate-800 text-white/80' : 'hover:bg-slate-200 text-slate-700'
                                         }`}
                                 >
                                     <div className="flex items-center gap-3">
@@ -591,8 +805,8 @@ const ControlGestionModule: React.FC<ControlGestionModuleProps> = ({ isDark }) =
                                                 onClick={() => setViewMode(mode)}
                                                 title={label}
                                                 className={`p-2 rounded-lg transition-colors ${viewMode === mode
-                                                        ? 'bg-indigo-600 text-white'
-                                                        : isDark ? 'text-white/60 hover:text-white' : 'text-slate-500 hover:text-slate-900'
+                                                    ? 'bg-indigo-600 text-white'
+                                                    : isDark ? 'text-white/60 hover:text-white' : 'text-slate-500 hover:text-slate-900'
                                                     }`}
                                             >
                                                 <Icon className="w-4 h-4" />
@@ -623,11 +837,7 @@ const ControlGestionModule: React.FC<ControlGestionModuleProps> = ({ isDark }) =
                             )}
 
                             {viewMode === 'calendar' && (
-                                <div className={`p-8 rounded-2xl text-center ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                                    <Calendar className={`w-16 h-16 mx-auto mb-4 ${isDark ? 'text-white/20' : 'text-slate-300'}`} />
-                                    <p className={`font-medium ${isDark ? 'text-white' : 'text-slate-700'}`}>Vista de Calendario</p>
-                                    <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Próximamente...</p>
-                                </div>
+                                <CalendarView />
                             )}
 
                             {viewMode === 'table' && (
