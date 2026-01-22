@@ -693,6 +693,189 @@ const ControlGestionModule: React.FC<ControlGestionModuleProps> = ({ isDark }) =
         );
     };
 
+    // ========== DASHBOARD VIEW ==========
+    const DashboardView = () => {
+        const stats = getProjectStats(selectedProjectId || '');
+        const totalTasks = stats.total;
+        const completedTasks = stats.completed;
+        const overdueTasks = filteredTasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'done').length;
+
+        // Tasks by Priority
+        const tasksByPriority = {
+            urgent: filteredTasks.filter(t => t.priority === 'urgent').length,
+            high: filteredTasks.filter(t => t.priority === 'high').length,
+            medium: filteredTasks.filter(t => t.priority === 'medium').length,
+            low: filteredTasks.filter(t => t.priority === 'low').length
+        };
+
+        // Tasks by Assignee (Top 5)
+        const tasksByAssignee = employees
+            .map(emp => ({
+                name: `${emp.firstName} ${emp.lastName}`,
+                count: filteredTasks.filter(t => t.assigneeIds.includes(emp.id)).length,
+                avatar: emp.firstName[0]
+            }))
+            .sort((a, b) => b.count - a.count)
+            .filter(item => item.count > 0)
+            .slice(0, 5);
+
+        // Recent Activity / Upcoming Deadlines
+        const upcomingDeadlines = [...filteredTasks]
+            .filter(t => t.dueDate && t.status !== 'done')
+            .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
+            .slice(0, 5);
+
+        const KPI = ({ title, value, color, icon: Icon }: { title: string, value: string | number, color: string, icon: any }) => (
+            <div className={`p-4 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <div className="flex items-center justify-between mb-2">
+                    <span className={`p-2 rounded-lg ${color} bg-opacity-20`}>
+                        <Icon className={`w-5 h-5 ${color.replace('bg-', 'text-')}`} />
+                    </span>
+                    <span className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{value}</span>
+                </div>
+                <h3 className={`text-sm font-medium ${isDark ? 'text-white/60' : 'text-slate-500'}`}>{title}</h3>
+            </div>
+        );
+
+        return (
+            <div className="h-full overflow-y-auto space-y-6 pb-8">
+                {/* Header KPIs */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <KPI title="Total Tareas" value={totalTasks} color="bg-indigo-500" icon={Layers} />
+                    <KPI title="Completadas" value={completedTasks} color="bg-emerald-500" icon={CheckCircle2} />
+                    <KPI title="Atrasadas" value={overdueTasks} color="bg-red-500" icon={AlertCircle} />
+                    <KPI title="Progreso" value={`${stats.percentComplete}%`} color="bg-blue-500" icon={BarChart3} />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Status Distribution */}
+                    <div className={`p-6 rounded-2xl border col-span-2 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                        <h3 className={`text-lg font-bold mb-6 ${isDark ? 'text-white' : 'text-slate-900'}`}>Distribución por Estado</h3>
+                        <div className="space-y-4">
+                            {projectStatuses.map(status => {
+                                const count = filteredTasks.filter(t => t.status === status).length;
+                                const percentage = totalTasks > 0 ? (count / totalTasks) * 100 : 0;
+                                const colorClass =
+                                    status === 'done' ? 'bg-emerald-500' :
+                                        status === 'in_progress' ? 'bg-amber-500' :
+                                            status === 'blocked' ? 'bg-red-500' :
+                                                'bg-indigo-500';
+
+                                return (
+                                    <div key={status}>
+                                        <div className="flex justify-between text-sm mb-1">
+                                            <span className={`font-medium ${isDark ? 'text-white/80' : 'text-slate-700'}`}>{STATUS_LABELS[status]}</span>
+                                            <span className={`${isDark ? 'text-white/60' : 'text-slate-500'}`}>{count} ({Math.round(percentage)}%)</span>
+                                        </div>
+                                        <div className={`h-2.5 rounded-full overflow-hidden ${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                                            <div
+                                                className={`h-full rounded-full ${colorClass}`}
+                                                style={{ width: `${percentage}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Workload */}
+                    <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                        <h3 className={`text-lg font-bold mb-6 ${isDark ? 'text-white' : 'text-slate-900'}`}>Carga de Trabajo</h3>
+                        <div className="space-y-4">
+                            {tasksByAssignee.map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold text-white">
+                                        {item.avatar}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>{item.name}</p>
+                                        <div className={`h-1.5 mt-1 rounded-full overflow-hidden ${isDark ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                                            <div
+                                                className="h-full bg-indigo-500 rounded-full"
+                                                style={{ width: `${(item.count / totalTasks) * 100}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <span className={`text-sm font-bold ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
+                                        {item.count}
+                                    </span>
+                                </div>
+                            ))}
+                            {tasksByAssignee.length === 0 && (
+                                <p className={`text-center py-4 text-sm ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                                    No hay asignaciones
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Upcoming Deadlines */}
+                    <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                        <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Próximas Entregas</h3>
+                        <div className="space-y-3">
+                            {upcomingDeadlines.map(task => {
+                                const daysLeft = Math.ceil((new Date(task.dueDate!).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                                const isUrgent = daysLeft <= 2;
+
+                                return (
+                                    <div
+                                        key={task.id}
+                                        onClick={() => { setEditingTask(task); setShowTaskModal(true); }}
+                                        className={`p-3 rounded-xl border flex items-center gap-3 cursor-pointer transition-colors ${isDark
+                                            ? 'border-slate-700 hover:bg-slate-700/50'
+                                            : 'border-slate-100 hover:bg-slate-50'
+                                            }`}
+                                    >
+                                        <div className={`p-2 rounded-lg ${isUrgent ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
+                                            <Clock className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-slate-900'}`}>{task.title}</p>
+                                            <p className={`text-xs ${isUrgent ? 'text-red-500 font-medium' : isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                                                {daysLeft < 0 ? 'Atrasada' : daysLeft === 0 ? 'Hoy' : `${daysLeft} días restantes`}
+                                            </p>
+                                        </div>
+                                        <span className={`text-xs px-2 py-1 rounded-full ${PRIORITY_COLORS[task.priority].bg} ${PRIORITY_COLORS[task.priority].text}`}>
+                                            {task.priority}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                            {upcomingDeadlines.length === 0 && (
+                                <p className={`text-center py-4 text-sm ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                                    No hay entregas próximas
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Priority Breakdown */}
+                    <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                        <h3 className={`text-lg font-bold mb-4 ${isDark ? 'text-white' : 'text-slate-900'}`}>Desglose por Prioridad</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                            {Object.entries(tasksByPriority).map(([priority, count]) => (
+                                <div key={priority} className={`p-4 rounded-xl border ${isDark ? 'border-slate-700 bg-slate-800/50' : 'border-slate-100 bg-slate-50'}`}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className={`w-2 h-2 rounded-full ${priority === 'urgent' ? 'bg-red-500' :
+                                            priority === 'high' ? 'bg-orange-500' :
+                                                priority === 'medium' ? 'bg-amber-500' :
+                                                    'bg-blue-500'
+                                            }`} />
+                                        <span className={`text-sm font-medium capitalize ${isDark ? 'text-white' : 'text-slate-700'}`}>{priority}</span>
+                                    </div>
+                                    <p className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{count}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     // ========== KANBAN COLUMN ==========
     const KanbanColumn = ({ status }: { status: CGTaskStatus }) => {
         const columnTasks = getTasksByStatus(selectedProjectId || '', status);
@@ -993,11 +1176,7 @@ const ControlGestionModule: React.FC<ControlGestionModuleProps> = ({ isDark }) =
                             )}
 
                             {viewMode === 'dashboard' && (
-                                <div className={`p-8 rounded-2xl text-center ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                                    <BarChart3 className={`w-16 h-16 mx-auto mb-4 ${isDark ? 'text-white/20' : 'text-slate-300'}`} />
-                                    <p className={`font-medium ${isDark ? 'text-white' : 'text-slate-700'}`}>Dashboard</p>
-                                    <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Próximamente...</p>
-                                </div>
+                                <DashboardView />
                             )}
                         </div>
                     </>
