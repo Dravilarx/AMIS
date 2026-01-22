@@ -47,7 +47,9 @@ export const useEmployees = () => {
         if (data.length === 0) {
           console.log('No employees found, seeding...');
           for (const emp of INITIAL_EMPLOYEES) {
-            await addDocument(collection, emp);
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { id, ...empData } = emp;
+            await addDocument(collection, empData);
           }
           data = await getDocuments<Employee>(collection);
         }
