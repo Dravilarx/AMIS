@@ -12,6 +12,8 @@ import {
     Users,
     ChevronRight,
     ChevronLeft,
+    ChevronUp,
+    ChevronDown,
     X,
     Edit2,
     Trash2,
@@ -545,6 +547,152 @@ const ControlGestionModule: React.FC<ControlGestionModuleProps> = ({ isDark }) =
         );
     };
 
+    // ========== TABLE VIEW ==========
+    const TableView = () => {
+        const [sortConfig, setSortConfig] = useState<{ key: keyof ControlTask | 'assignees'; direction: 'asc' | 'desc' } | null>(null);
+
+        const handleSort = (key: keyof ControlTask | 'assignees') => {
+            let direction: 'asc' | 'desc' = 'asc';
+            if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+                direction = 'desc';
+            }
+            setSortConfig({ key, direction });
+        };
+
+        const sortedTasks = [...filteredTasks].sort((a, b) => {
+            if (!sortConfig) return 0;
+            const { key, direction } = sortConfig;
+
+            let valA: any = a[key as keyof ControlTask] || '';
+            let valB: any = b[key as keyof ControlTask] || '';
+
+            if (key === 'assignees') {
+                valA = employees.filter(e => a.assigneeIds.includes(e.id)).map(e => e.firstName).join('');
+                valB = employees.filter(e => b.assigneeIds.includes(e.id)).map(e => e.firstName).join('');
+            }
+
+            if (valA < valB) return direction === 'asc' ? -1 : 1;
+            if (valA > valB) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        const SortIcon = ({ columnKey }: { columnKey: string }) => {
+            if (sortConfig?.key !== columnKey) return <div className="w-4 h-4" />;
+            return sortConfig.direction === 'asc'
+                ? <ChevronUp className="w-4 h-4 ml-1" />
+                : <ChevronDown className="w-4 h-4 ml-1" />;
+        };
+
+        return (
+            <div className={`rounded-xl overflow-hidden border flex flex-col h-full ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
+                {/* Table Header */}
+                <div className={`grid grid-cols-12 gap-4 p-4 border-b text-sm font-semibold sticky top-0 z-10 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                    <div
+                        className="col-span-4 flex items-center cursor-pointer hover:text-indigo-500"
+                        onClick={() => handleSort('title')}
+                    >
+                        Tarea <SortIcon columnKey="title" />
+                    </div>
+                    <div
+                        className="col-span-2 flex items-center cursor-pointer hover:text-indigo-500"
+                        onClick={() => handleSort('status')}
+                    >
+                        Estado <SortIcon columnKey="status" />
+                    </div>
+                    <div
+                        className="col-span-2 flex items-center cursor-pointer hover:text-indigo-500"
+                        onClick={() => handleSort('priority')}
+                    >
+                        Prioridad <SortIcon columnKey="priority" />
+                    </div>
+                    <div
+                        className="col-span-2 flex items-center cursor-pointer hover:text-indigo-500"
+                        onClick={() => handleSort('dueDate')}
+                    >
+                        Fecha Límite <SortIcon columnKey="dueDate" />
+                    </div>
+                    <div
+                        className="col-span-2 flex items-center cursor-pointer hover:text-indigo-500"
+                        onClick={() => handleSort('assignees')}
+                    >
+                        Asignados <SortIcon columnKey="assignees" />
+                    </div>
+                </div>
+
+                {/* Table Body */}
+                <div className="overflow-y-auto flex-1">
+                    {sortedTasks.length === 0 ? (
+                        <div className={`p-8 text-center ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                            No hay tareas que mostrar
+                        </div>
+                    ) : (
+                        sortedTasks.map((task) => {
+                            const assignees = employees.filter(e => task.assigneeIds.includes(e.id));
+                            const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done';
+
+                            return (
+                                <div
+                                    key={task.id}
+                                    onClick={() => { setEditingTask(task); setShowTaskModal(true); }}
+                                    className={`grid grid-cols-12 gap-4 p-4 border-b items-center text-sm cursor-pointer transition-colors
+                                        ${isDark
+                                            ? 'border-slate-800 text-white/80 hover:bg-slate-800'
+                                            : 'border-slate-100 text-slate-700 hover:bg-slate-50'
+                                        }
+                                    `}
+                                >
+                                    <div className="col-span-4 font-medium truncate pr-4">
+                                        {task.title}
+                                    </div>
+                                    <div className="col-span-2">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap
+                                            ${task.status === 'done' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                                                task.status === 'in_progress' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                                                    task.status === 'blocked' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                                                        isDark ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'
+                                            }`}
+                                        >
+                                            {STATUS_LABELS[task.status]}
+                                        </span>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[task.priority].bg} ${PRIORITY_COLORS[task.priority].text}`}>
+                                            {task.priority === 'urgent' ? '🔥 ' : ''}{task.priority.toUpperCase()}
+                                        </span>
+                                    </div>
+                                    <div className="col-span-2">
+                                        {task.dueDate ? (
+                                            <div className={`flex items-center gap-1 ${isOverdue ? 'text-red-500 font-bold' : ''}`}>
+                                                <Clock className="w-3 h-3" />
+                                                {new Date(task.dueDate).toLocaleDateString('es-CL')}
+                                            </div>
+                                        ) : (
+                                            <span className="opacity-30 text-xs">-</span>
+                                        )}
+                                    </div>
+                                    <div className="col-span-2">
+                                        <div className="flex -space-x-2 overflow-hidden">
+                                            {assignees.map(a => (
+                                                <div
+                                                    key={a.id}
+                                                    className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-[10px] font-bold text-white ring-2 ring-white dark:ring-slate-900"
+                                                    title={`${a.firstName} ${a.lastName}`}
+                                                >
+                                                    {a.firstName[0]}
+                                                </div>
+                                            ))}
+                                            {assignees.length === 0 && <span className="opacity-30 text-xs">-</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     // ========== KANBAN COLUMN ==========
     const KanbanColumn = ({ status }: { status: CGTaskStatus }) => {
         const columnTasks = getTasksByStatus(selectedProjectId || '', status);
@@ -841,11 +989,7 @@ const ControlGestionModule: React.FC<ControlGestionModuleProps> = ({ isDark }) =
                             )}
 
                             {viewMode === 'table' && (
-                                <div className={`p-8 rounded-2xl text-center ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
-                                    <Table className={`w-16 h-16 mx-auto mb-4 ${isDark ? 'text-white/20' : 'text-slate-300'}`} />
-                                    <p className={`font-medium ${isDark ? 'text-white' : 'text-slate-700'}`}>Vista de Tabla</p>
-                                    <p className={`text-sm ${isDark ? 'text-white/40' : 'text-slate-400'}`}>Próximamente...</p>
-                                </div>
+                                <TableView />
                             )}
 
                             {viewMode === 'dashboard' && (
